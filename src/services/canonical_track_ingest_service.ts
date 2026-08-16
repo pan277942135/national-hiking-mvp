@@ -205,6 +205,13 @@ export async function ingestCanonicalRawTrack(
   };
 }
 
+/**
+ * Low-level editorial assignment helper.
+ *
+ * It deliberately CANNOT create TARGET_ACCEPTED. A target acceptance must be
+ * derived by `evaluateAndAssignCanonicalRawTrack()` in geometry_gate_service,
+ * so callers cannot bypass the geometry-first QA contract with a PASS string.
+ */
 export async function assignCanonicalRawTrack(
   pool: Pool,
   input: {
@@ -226,19 +233,10 @@ export async function assignCanonicalRawTrack(
   const route = await pool.query(`SELECT route_id FROM route WHERE route_id = $1`, [input.routeId]);
   if (!route.rows[0]) throw new Error(`Route not found: ${input.routeId}`);
 
-  if (
-    input.assignmentState === 'TARGET_ACCEPTED' &&
-    (!track.rows[0].recorded_execution || !['RECORDED_GPS', 'RECORDED_GPS_MERGED'].includes(track.rows[0].provenance_class))
-  ) {
-    throw new Error('TARGET_ACCEPTED requires recorded execution provenance');
-  }
-
-  if (
-    input.assignmentState === 'CONTROL_ONLY' &&
-    track.rows[0].provenance_class === 'RECORDED_GPS'
-  ) {
-    // Allowed only if editorial review explicitly chooses control usage; no
-    // automatic mutation is performed here.
+  if (input.assignmentState === 'TARGET_ACCEPTED') {
+    throw new Error(
+      'Direct TARGET_ACCEPTED assignment is disabled; use evaluateAndAssignCanonicalRawTrack() with an explicit GeometryGateProfile'
+    );
   }
 
   await pool.query(
