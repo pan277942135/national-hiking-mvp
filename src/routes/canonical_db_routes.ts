@@ -12,6 +12,7 @@ import {
   getRegisteredGeometryGateProfile,
   listRegisteredGeometryGateProfiles
 } from '../services/geometry_gate_profile_registry.js';
+import { evaluateGeometryConsensusReadiness } from '../services/geometry_consensus_service.js';
 import { recordFirstPartyActivity } from '../services/first_party_activity_service.js';
 import { buildCanonicalRoutePageProjection } from '../services/canonical_page_projection_service.js';
 import { authorizeCanonicalWrite } from '../security/canonical_write_auth.js';
@@ -50,13 +51,23 @@ export function registerCanonicalDbRoutes(app: Express): void {
         repo.getAppliedMigrationNames()
       ]);
 
-      const routeEvidence = await Promise.all(routes.map(async route => ({
-        route_id: route.route_id,
-        route_state: route.route_state,
-        active_canonical_track_id: route.active_canonical_track_id,
-        accepted_raw_execution_count: await repo.countIndependentAcceptedRawExecutions(route.route_id),
-        accepted_first_party_actor_count: await repo.countIndependentAcceptedActors(route.route_id)
-      })));
+      const routeEvidence = await Promise.all(routes.map(async route => {
+        const [rawCount, actorCount, readiness] = await Promise.all([
+          repo.countIndependentAcceptedRawExecutions(route.route_id),
+          repo.countIndependentAcceptedActors(route.route_id),
+          evaluateGeometryConsensusReadiness(pool, route.route_id)
+        ]);
+        return {
+          route_id: route.route_id,
+          route_state: route.route_state,
+          active_canonical_track_id: route.active_canonical_track_id,
+          accepted_raw_execution_count: rawCount,
+          accepted_first_party_actor_count: actorCount,
+          geometry_consensus_state: readiness.state,
+          ready_for_editorial_canonicalization:
+            readiness.state === 'READY_FOR_EDITORIAL_CANONICALIZATION'
+        };
+      }));
 
       res.json({
         repository_mode: 'CANONICAL_POSTGRES',
@@ -106,12 +117,11 @@ export function registerCanonicalDbRoutes(app: Express): void {
       const repo = new CanonicalPostgresRepository(pool);
       const route = await repo.findRoute(req.params.routeId);
       if (!route) return res.status(404).json({ error: `Route not found: ${req.params.routeId}` });
-      const [assignments, activities, dependencies, rawCount, actorCount, pageProjection] = await Promise.all([
+      const [assignments, activities, dependencies, readiness, pageProjection] = await Promise.all([
         repo.listRawAssignments(route.route_id),
         repo.listActivityAssignments(route.route_id),
         repo.listDependenciesForEntity('route', route.route_id),
-        repo.countIndependentAcceptedRawExecutions(route.route_id),
-        repo.countIndependentAcceptedActors(route.route_id),
+        evaluateGeometryConsensusReadiness(pool, route.route_id),
         buildCanonicalRoutePageProjection(pool, route.route_id)
       ]);
       res.json({
@@ -122,16 +132,26 @@ export function registerCanonicalDbRoutes(app: Express): void {
         activity_assignments: activities,
         dependencies,
         page_projection: pageProjection,
-        geometry_consensus_readiness: {
-          independent_recorded_raw_executions: rawCount,
-          independent_first_party_actors: actorCount,
-          default_threshold: 2,
-          ready_for_editorial_review: rawCount >= 2 || actorCount >= 2,
-          auto_promotion_allowed: false
-        }
+        geometry_consensus_readiness: readiness
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  app.get('/api/canonical/routes/:routeId/geometry-consensus-readiness', async (req, res) => {
+    const pool = getPgPool();
+    if (!pool) return unavailable(res);
+    try {
+      const readiness = await evaluateGeometryConsensusReadiness(pool, req.params.routeId);
+      res.json({
+        repository_mode: 'CANONICAL_POSTGRES',
+        data_classification: 'GEOMETRY_CONSENSUS_READINESS',
+        ...readiness
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      res.status(message.startsWith('Route not found:') ? 404 : 500).json({ error: message });
     }
   });
 
