@@ -8,7 +8,7 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "test": "tsx --test tests/domain_invariants.test.ts tests/hard_gate.test.ts tests/page_projection_policy.test.ts",
-    "test:db": "tsx --test tests/postgres_integration.test.ts && tsx --test tests/geometry_consensus_integration.test.ts",
+    "test:db": "tsx --test tests/postgres_integration.test.ts && tsx --test tests/geometry_consensus_integration.test.ts && tsx --test tests/canonical_page_projection_postgres.test.ts",
     "test:all": "npm test && npm run test:db",
     "migrate": "tsx -e \"import('./src/migration_runner.js').then(m => m.runDatabaseMigrations().then(console.log))\"",
     "seed": "tsx -e \"import('./seed/seed_loader.js').then(async s => { const { createMemoryRepositories } = await import('./src/repository/repositories.js'); const { repos } = createMemoryRepositories(); const res = await s.loadSeedManifest(repos); console.log(res); })\"",
