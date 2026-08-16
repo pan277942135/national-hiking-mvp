@@ -6,10 +6,14 @@ Evidence-first hiking route governance and recommendation backend with an AI Stu
 
 - **Canonical persistence contract:** PostgreSQL/PostGIS migrations under `db/migrations/`
 - **Canonical bootstrap seed:** `db/four_area_seed_manifest_v0_2.json`
-- **Current API repository:** `MEMORY_UI_DEMO`
+- **Presentation API/UI repository:** `MEMORY_UI_DEMO`
 - **AI Studio demo fixtures:** `seed/ui_demo_manifest.json` (`UI_DEMO_ONLY`)
-- **Live PostgreSQL API adapter:** not yet wired
-- **Cloud SQL / paid deployment:** not authorized yet
+- **Canonical API namespace:** `/api/canonical/*` backed only by PostgreSQL/PostGIS; never falls back to demo fixtures
+- **Canonical write policy:** fail-closed; mutation endpoints require `CANONICAL_WRITE_TOKEN`
+- **Canonical geometry promotion:** explicit editorial action only after FULL_ROUTE_QA + consensus readiness
+- **Cloud SQL / paid deployment:** not authorized; CI uses an ephemeral PostGIS service container
+
+The presentation layer and canonical database layer intentionally coexist during migration. `/api/overview` remains demo/presentation data; `/api/canonical/*` is the evidence-backed database namespace when PostgreSQL/PostGIS is configured.
 
 ## Non-negotiable invariants
 
@@ -19,11 +23,21 @@ Evidence-first hiking route governance and recommendation backend with an AI Stu
 - ambiguous geometry does not become execution evidence
 - sibling Route evidence never counts toward target child Route consensus
 - child-route public geometry consensus defaults to >=2 independent accepted Recorded GPS executions
+- conservative public first-party consensus also requires >=2 distinct actor hashes
+- CORE_QA is diagnostic only; only a server-approved `FULL_ROUTE_QA` profile may derive `TARGET_ACCEPTED`
+- callers cannot directly force `TARGET_ACCEPTED`
+- geometry consensus readiness never auto-promotes a Route or creates `CanonicalTrack`
+- explicit canonicalization copies one editor-selected accepted RawTrack exactly; it does not average/stitch a new line
+- geometry approval does not infer legal clearance, runtime safety, or `EXECUTABLE`
 - Unknown remains Unknown
 - popularity never overrides Rule/Legal truth
 - runtime facts require freshness and never become static truth
 - protected-area route publication requires positive authorization
 - Page Projection never mutates canonical truth
+
+### S12-A safety boundary
+
+`ZJ-S12-A` may have canonical identity while geometry remains blocked. Its historical A01→A03 anchor profile is `CORE_QA`, not a full 下马坊→流徽榭 acceptance profile. There is currently no production/server-registered `FULL_ROUTE_QA` profile for S12-A, so the public canonicalization pipeline cannot promote it from core-only evidence.
 
 ## Canonical DB migration chain
 
@@ -40,6 +54,45 @@ Evidence-first hiking route governance and recommendation backend with an AI Stu
 
 The root-level `migrations/` directory is a legacy AI Studio draft and is not authoritative.
 
+## Canonical geometry pipeline
+
+```text
+GPX/KML
+  -> RawTrack + SHA256/provenance
+  -> server-owned GeometryGateProfile
+  -> FULL_ROUTE_QA TARGET_ACCEPTED only when spatial gate passes
+  -> First-party Activity linked to the persisted RawTrack gate truth
+  -> Geometry consensus readiness
+       - >=2 independent executions
+       - >=2 distinct actors (FIRST_PARTY_PUBLIC default)
+       - pairwise geometry compatibility
+  -> READY_FOR_EDITORIAL_CANONICALIZATION
+  -> explicit token-protected editorial activation
+  -> exact accepted RawTrack copied to CanonicalTrack
+  -> Route becomes at most STATIC_PUBLISHABLE from geometry approval alone
+```
+
+Readiness and activation are separate by design. Activation re-evaluates consensus inside a PostgreSQL `SERIALIZABLE` transaction to avoid a stale time-of-check/time-of-use promotion.
+
+## Canonical API
+
+Read endpoints require PostgreSQL/PostGIS but do not require the write token:
+
+- `GET /api/canonical/overview`
+- `GET /api/canonical/areas/:areaId`
+- `GET /api/canonical/routes/:routeId`
+- `GET /api/canonical/routes/:routeId/page-projection`
+- `GET /api/canonical/routes/:routeId/geometry-consensus-readiness`
+- `GET /api/canonical/geometry-gate-profiles`
+
+Mutation endpoints require `Authorization: Bearer <CANONICAL_WRITE_TOKEN>` and fail closed when the token is not configured:
+
+- `POST /api/canonical/tracks`
+- `POST /api/canonical/routes/:routeId/raw-assignments` — cannot set `TARGET_ACCEPTED`
+- `POST /api/canonical/routes/:routeId/geometry-gate` — server-owned profiles only
+- `POST /api/canonical/activities`
+- `POST /api/canonical/routes/:routeId/canonical-track-activation` — explicit editorial promotion only
+
 ## Development
 
 ```bash
@@ -50,13 +103,21 @@ npm run build
 npm run dev
 ```
 
+For the complete database-backed regression suite, provide a PostgreSQL/PostGIS database and run:
+
+```bash
+npm run test:db
+```
+
+GitHub Actions automatically provisions `postgis/postgis:16-3.5`, runs the canonical migration chain and seed replay, executes the deterministic and PostGIS regression suites, then runs the production build.
+
 ## Database validation
 
-Without `DATABASE_URL`, migration execution is `VALIDATED_ONLY`; no migration is reported as applied.
+Without `DATABASE_URL`/`PGHOST`, migration execution is `VALIDATED_ONLY`; no migration is reported as applied.
 
-With a real PostgreSQL/PostGIS connection, `npm run migrate` can apply the canonical `db/migrations` chain and records migration checksums.
+With a real PostgreSQL/PostGIS connection, `npm run migrate` applies the canonical `db/migrations` chain and records migration checksums. `npm run seed:db` loads the evidence-backed four-area bootstrap seed while quarantining runtime-only facts.
 
-A reachable database does **not** make the current API database-backed. The API still uses the explicit memory/UI-demo repository until a canonical Postgres repository adapter is implemented and integration-tested.
+Database connectivity does **not** cause the presentation endpoints to switch repositories. The canonical database is exposed only through the explicit `/api/canonical/*` namespace; the legacy AI Studio dashboard remains `MEMORY_UI_DEMO` until a deliberate UI/read-model cutover.
 
 ## Reconciliation record
 
