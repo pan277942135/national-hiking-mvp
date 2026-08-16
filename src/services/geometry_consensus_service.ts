@@ -30,6 +30,12 @@ export interface GeometryConsensusReadiness {
   state: GeometryConsensusReadinessState;
   independentExecutionCount: number;
   distinctActorCount: number;
+  /**
+   * Maximum number of actor/execution pairs where neither actor nor independent
+   * execution key is reused. FIRST_PARTY_PUBLIC gates on this value, not merely
+   * on aggregate actor count.
+   */
+  independentActorExecutionPairCount: number;
   acceptedRawTrackIds: string[];
   pairCompatibility: GeometryPairCompatibility[];
   thresholds: GeometryConsensusThresholds;
@@ -48,6 +54,50 @@ export const DEFAULT_GEOMETRY_CONSENSUS_THRESHOLDS: GeometryConsensusThresholds 
 };
 
 type ConsensusQueryable = Pick<Pool, 'query'> | Pick<PoolClient, 'query'>;
+
+interface ActorExecutionEvidence {
+  actor_hash: string;
+  raw_track_id: string;
+  independence_key: string;
+}
+
+/**
+ * Maximum bipartite matching between actor hashes and independent execution
+ * keys. This prevents two actors attached to the same RawTrack/execution from
+ * masquerading as two independent public executions, while still allowing a
+ * repeated actor to support multiple days without increasing the public count.
+ */
+function maximumIndependentActorExecutionPairs(rows: ActorExecutionEvidence[]): number {
+  const actorToExecutions = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const set = actorToExecutions.get(row.actor_hash) ?? new Set<string>();
+    set.add(row.independence_key);
+    actorToExecutions.set(row.actor_hash, set);
+  }
+
+  const executionToActor = new Map<string, string>();
+  const actors = [...actorToExecutions.keys()].sort();
+
+  const tryAssign = (actor: string, visitedExecutions: Set<string>): boolean => {
+    const executions = [...(actorToExecutions.get(actor) ?? [])].sort();
+    for (const execution of executions) {
+      if (visitedExecutions.has(execution)) continue;
+      visitedExecutions.add(execution);
+      const currentActor = executionToActor.get(execution);
+      if (!currentActor || tryAssign(currentActor, visitedExecutions)) {
+        executionToActor.set(execution, actor);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  let matches = 0;
+  for (const actor of actors) {
+    if (tryAssign(actor, new Set<string>())) matches += 1;
+  }
+  return matches;
+}
 
 /**
  * Evaluates whether already FULL_ROUTE_QA-gated child-route evidence is ready
@@ -103,8 +153,11 @@ export async function evaluateGeometryConsensusReadiness(
   const acceptedRawTrackIds = [...independent.values()];
   const independentExecutionCount = acceptedRawTrackIds.length;
 
-  const actors = await pool.query<{ actor_hash: string }>(
-    `SELECT DISTINCT act.actor_hash
+  const actorEvidence = await pool.query<ActorExecutionEvidence>(
+    `SELECT DISTINCT
+            act.actor_hash,
+            act.raw_track_id,
+            COALESCE(rta.independent_provenance_key, rta.raw_track_id) AS independence_key
        FROM activity_route_assignment ara
        JOIN activity act ON act.activity_id = ara.activity_id
        JOIN raw_track_route_assignment rta
@@ -119,10 +172,12 @@ export async function evaluateGeometryConsensusReadiness(
         AND rta.geometry_gate_state = 'PASS'
         AND rta.qa->>'purpose' = 'FULL_ROUTE_QA'
         AND t.recorded_execution = true
-        AND t.provenance_class IN ('RECORDED_GPS', 'RECORDED_GPS_MERGED')`,
+        AND t.provenance_class IN ('RECORDED_GPS', 'RECORDED_GPS_MERGED')
+      ORDER BY act.actor_hash, independence_key`,
     [routeId]
   );
-  const distinctActorCount = actors.rows.length;
+  const distinctActorCount = new Set(actorEvidence.rows.map(row => row.actor_hash)).size;
+  const independentActorExecutionPairCount = maximumIndependentActorExecutionPairs(actorEvidence.rows);
 
   const pairCompatibility: GeometryPairCompatibility[] = [];
   for (let i = 0; i < acceptedRawTrackIds.length; i++) {
@@ -188,9 +243,15 @@ export async function evaluateGeometryConsensusReadiness(
     reasonCodes.push(
       `INDEPENDENT_EXECUTIONS_${independentExecutionCount}_OF_${thresholds.minIndependentExecutions}`
     );
-  } else if (mode === 'FIRST_PARTY_PUBLIC' && distinctActorCount < thresholds.minDistinctActors) {
+  } else if (
+    mode === 'FIRST_PARTY_PUBLIC' &&
+    independentActorExecutionPairCount < thresholds.minDistinctActors
+  ) {
     state = 'INSUFFICIENT_INDEPENDENT_ACTORS';
-    reasonCodes.push(`DISTINCT_ACTORS_${distinctActorCount}_OF_${thresholds.minDistinctActors}`);
+    reasonCodes.push(
+      `INDEPENDENT_ACTOR_EXECUTION_PAIRS_${independentActorExecutionPairCount}_OF_${thresholds.minDistinctActors}`
+    );
+    reasonCodes.push(`DISTINCT_ACTORS_OBSERVED_${distinctActorCount}`);
   } else if (pairCompatibility.some(pair => !pair.compatible)) {
     state = 'INCOMPATIBLE_CLUSTER';
     reasonCodes.push('PAIRWISE_GEOMETRY_COMPATIBILITY_FAILED');
@@ -205,6 +266,7 @@ export async function evaluateGeometryConsensusReadiness(
     state,
     independentExecutionCount,
     distinctActorCount,
+    independentActorExecutionPairCount,
     acceptedRawTrackIds,
     pairCompatibility,
     thresholds,
