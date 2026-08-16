@@ -144,6 +144,7 @@ async function insertCanonicalTrack(
     consensus_reason_codes: readiness.reasonCodes,
     independent_execution_count: readiness.independentExecutionCount,
     distinct_actor_count: readiness.distinctActorCount,
+    independent_actor_execution_pair_count: readiness.independentActorExecutionPairCount,
     accepted_raw_track_ids: readiness.acceptedRawTrackIds,
     pair_compatibility: readiness.pairCompatibility,
     thresholds: readiness.thresholds,
@@ -245,8 +246,8 @@ async function insertCanonicalTrack(
  * from a stale consensus snapshot.
  *
  * Public activation always uses FIRST_PARTY_PUBLIC consensus: >=2 independent
- * accepted FULL_ROUTE_QA executions, >=2 distinct first-party actor hashes and
- * pairwise-compatible geometry. RAW_INDEPENDENT may be useful as a diagnostic
+ * accepted FULL_ROUTE_QA executions, with >=2 independent actor↔execution pairs,
+ * and pairwise-compatible geometry. RAW_INDEPENDENT may be useful as a diagnostic
  * mode elsewhere, but it cannot activate public canonical geometry.
  *
  * The selected geometry is copied exactly from one approved RawTrack. No
