@@ -1,0 +1,26 @@
+-- Migration 0002: Areas, Jurisdictions and Protection Scopes
+-- National Hiking Backend MVP
+
+CREATE TABLE IF NOT EXISTS areas (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    area_type VARCHAR(64) NOT NULL, -- e.g. URBAN_SINGLE_MOUNTAIN, COMPOSITE_LOW_MOUNTAIN, ALPINE_CROSS_JURISDICTION, STRICT_PROTECTED_AREA
+    protection_level VARCHAR(64) NOT NULL DEFAULT 'OPEN', -- e.g. OPEN, SCENIC, NATURE_RESERVE, STRICT_PROTECTION
+    jurisdiction_code VARCHAR(128) NOT NULL,
+    boundary_geojson JSONB,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS jurisdictions (
+    code VARCHAR(128) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    level VARCHAR(64) NOT NULL, -- e.g. NATIONAL, PROVINCIAL, MUNICIPAL, DISTRICT
+    parent_code VARCHAR(128) REFERENCES jurisdictions(code) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_areas_slug ON areas(slug);
+CREATE INDEX IF NOT EXISTS idx_areas_protection_level ON areas(protection_level);
