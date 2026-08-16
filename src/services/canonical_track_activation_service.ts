@@ -168,21 +168,36 @@ async function insertCanonicalTrack(
 }
 
 /**
- * Explicit editorial action only. Consensus readiness is evaluated first, then
- * rechecked under a transaction before an exact accepted RawTrack geometry is
- * copied into CanonicalTrack. No clustering/averaging creates a new line.
+ * Explicit editorial action only.
+ *
+ * The consensus predicate is evaluated inside the same SERIALIZABLE transaction
+ * that creates CanonicalTrack and updates Route. This removes the previous
+ * time-of-check/time-of-use window between a readiness read and activation.
+ * PostgreSQL SSI will abort a conflicting concurrent evidence mutation rather
+ * than allow activation from a stale consensus snapshot.
+ *
+ * The selected geometry is copied exactly from one approved RawTrack. No
+ * clustering/averaging constructs a new navigation line.
  */
 export async function activateCanonicalTrackFromAcceptedRaw(
   pool: Pool,
   input: ActivateCanonicalTrackInput
 ): Promise<ActivateCanonicalTrackResult> {
-  const readiness = await evaluateGeometryConsensusReadiness(pool, input.routeId, {
-    mode: input.consensusMode ?? 'FIRST_PARTY_PUBLIC'
-  });
-
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+
+    // Serialize editorial activation for the child Route before evaluating the
+    // consensus predicate. Readiness itself is then derived through this client.
+    const lockedRoute = await client.query(
+      'SELECT route_id FROM route WHERE route_id = $1 FOR UPDATE',
+      [input.routeId]
+    );
+    if (!lockedRoute.rows[0]) throw new Error(`Route not found: ${input.routeId}`);
+
+    const readiness = await evaluateGeometryConsensusReadiness(client, input.routeId, {
+      mode: input.consensusMode ?? 'FIRST_PARTY_PUBLIC'
+    });
     const result = await insertCanonicalTrack(client, input, readiness);
     await client.query('COMMIT');
     return result;
