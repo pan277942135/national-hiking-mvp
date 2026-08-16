@@ -29,25 +29,15 @@ export function assertTrackNotRoute(track: RawTrack, route: Route): void {
 
 /**
  * 2. A planned navigation line is never Recorded GPS execution evidence.
- *
- * The previous implementation compared the same string field to two mutually
- * exclusive values and could never fail. `recorded_execution` is intentionally
- * read as an adapter extension until the memory DTO is fully migrated to the
- * canonical persistence type.
  */
 export function assertPlannedLineNotRecordedGps(track: RawTrack): void {
-  const recordedExecution = (track as RawTrack & { recorded_execution?: boolean }).recorded_execution;
+  const recordedExecution = track.recorded_execution;
   if (track.provenance_type === 'PLANNED_NAVIGATION_LINE' && recordedExecution === true) {
     throw new InvariantViolationError(
       2,
       'PLANNED_NAVIGATION_LINE cannot contribute Recorded GPS execution evidence'
     );
   }
-}
-
-/** 4. Canonical identity without executable geometry is a valid state. */
-export function assertCanonicalIdentityWithoutGeometryAllowed(route: Route): boolean {
-  return route.identity_state !== 'CANONICAL' || route.geometry_state !== 'ACCEPTED_CONSENSUS' || true;
 }
 
 /** 6. Sibling variants must never share accepted evidence into target consensus. */
@@ -80,20 +70,16 @@ export function countIndependentTargetRecordedExecutions(
   for (const assignment of assignments) {
     if (assignment.route_id !== routeId) continue;
 
-    const state = (assignment as RawTrackRouteAssignment & { assignment_state?: string }).assignment_state;
+    const state = assignment.assignment_state;
     const accepted = state ? state === 'TARGET_ACCEPTED' : assignment.match_status === 'ACCEPTED';
     if (!accepted) continue;
 
     const track = tracks.find(t => t.id === assignment.track_id);
     if (!track) continue;
     if (!['RECORDED_GPS', 'RECORDED_GPS_MERGED'].includes(track.provenance_type)) continue;
+    if (track.recorded_execution === false) continue;
 
-    const recordedExecution = (track as RawTrack & { recorded_execution?: boolean }).recorded_execution;
-    if (recordedExecution === false) continue;
-
-    const explicitKey = (assignment as RawTrackRouteAssignment & { independent_provenance_key?: string })
-      .independent_provenance_key;
-    keys.add(explicitKey || track.id);
+    keys.add(assignment.independent_provenance_key || track.id);
   }
 
   return keys.size;
