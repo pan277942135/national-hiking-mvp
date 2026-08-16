@@ -27,7 +27,7 @@ function requireCanonicalWrite(req: Request, res: Response): boolean {
  * legal clearance, runtime safety, or EXECUTABLE state.
  */
 export function registerCanonicalActivationRoute(app: Express): void {
-  app.post('/api/canonical/routes/:routeId/canonical-track-activation', async (req, res) => {
+  app.post('/api/canonical/routes/:routeId/canonical-track/activate', async (req, res) => {
     if (!requireCanonicalWrite(req, res)) return;
 
     const pool = getPgPool();
@@ -46,12 +46,15 @@ export function registerCanonicalActivationRoute(app: Express): void {
       if (typeof body.reviewerId !== 'string' || !body.reviewerId.trim()) {
         return res.status(400).json({ error: 'reviewerId is required.' });
       }
+      if (typeof body.reviewNote !== 'string' || !body.reviewNote.trim()) {
+        return res.status(400).json({ error: 'reviewNote is required as explicit editorial rationale.' });
+      }
 
       const result = await activateCanonicalTrackFromAcceptedRaw(pool, {
         routeId: req.params.routeId,
         sourceRawTrackId: body.sourceRawTrackId,
         reviewerId: body.reviewerId,
-        reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote : undefined,
+        reviewNote: body.reviewNote,
         consensusMode: 'FIRST_PARTY_PUBLIC'
       });
 
@@ -60,8 +63,9 @@ export function registerCanonicalActivationRoute(app: Express): void {
         data_classification: 'EDITORIAL_CANONICAL_GEOMETRY_PROMOTION',
         result,
         canonical_track_created: true,
-        geometry_derivation: 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING',
+        geometry_derivation: result.geometryDerivation,
         route_state_after_activation: result.routeState,
+        dependency_rows_resolved: result.dependencyRowsResolved,
         navigation_executable_inferred: false,
         legal_clearance_inferred: false,
         runtime_safety_inferred: false
@@ -80,7 +84,8 @@ export function registerCanonicalActivationRoute(app: Express): void {
       const message = (error as Error).message;
       const notFound = message.startsWith('Route not found:');
       const notReady = message.startsWith('Geometry consensus is not ready');
-      res.status(notFound ? 404 : notReady ? 409 : 400).json({ error: message });
+      const alreadyActive = message.includes('already has active CanonicalTrack');
+      res.status(notFound ? 404 : notReady || alreadyActive ? 409 : 400).json({ error: message });
     }
   });
 }
