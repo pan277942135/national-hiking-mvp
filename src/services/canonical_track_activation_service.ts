@@ -205,9 +205,9 @@ async function insertCanonicalTrack(
             stop_status = 'RESOLVED',
             resolved_at = now(),
             metadata = metadata || jsonb_build_object(
-              'resolved_by_canonical_track_id', $2,
-              'resolved_by_reviewer_id', $3,
-              'resolved_at', $4
+              'resolved_by_canonical_track_id', $2::text,
+              'resolved_by_reviewer_id', $3::text,
+              'resolved_at', $4::text
             )
       WHERE entity_type = 'route'
         AND entity_id = $1
