@@ -242,8 +242,9 @@ export class CanonicalPostgresRepository {
   }
 
   /**
-   * Raw evidence independence uses the persisted provenance key when present;
-   * otherwise each raw_track_id is treated as its own evidence unit.
+   * Raw evidence independence is intentionally identical to the eligibility
+   * subset used by GeometryConsensusReadiness: exact child Route, target
+   * accepted, gate PASS, FULL_ROUTE_QA, recorded execution provenance.
    */
   async countIndependentAcceptedRawExecutions(routeId: string): Promise<number> {
     const result = await this.pool.query<{ count: string }>(
@@ -252,6 +253,8 @@ export class CanonicalPostgresRepository {
          JOIN raw_track t ON t.raw_track_id = a.raw_track_id
         WHERE a.route_id = $1
           AND a.assignment_state = 'TARGET_ACCEPTED'
+          AND a.geometry_gate_state = 'PASS'
+          AND a.qa->>'purpose' = 'FULL_ROUTE_QA'
           AND t.recorded_execution = true
           AND t.provenance_class IN ('RECORDED_GPS', 'RECORDED_GPS_MERGED')`,
       [routeId]
@@ -261,17 +264,25 @@ export class CanonicalPostgresRepository {
 
   /**
    * First-party public consensus is stricter: at least two distinct actors.
-   * Repeated days by the same actor support repeatability only.
+   * The Activity must agree with the persisted FULL_ROUTE_QA RawTrack gate for
+   * the same child Route. Repeated days by one actor remain repeatability only.
    */
   async countIndependentAcceptedActors(routeId: string): Promise<number> {
     const result = await this.pool.query<{ count: string }>(
       `SELECT count(DISTINCT a.actor_hash)::text AS count
          FROM activity_route_assignment ara
          JOIN activity a ON a.activity_id = ara.activity_id
+         JOIN raw_track_route_assignment rta
+           ON rta.raw_track_id = a.raw_track_id
+          AND rta.route_id = ara.route_id
          JOIN raw_track t ON t.raw_track_id = a.raw_track_id
         WHERE ara.route_id = $1
           AND ara.assignment_state = 'TARGET_ACCEPTED'
+          AND ara.geometry_gate_state = 'PASS'
           AND a.integrity_state = 'PASS'
+          AND rta.assignment_state = 'TARGET_ACCEPTED'
+          AND rta.geometry_gate_state = 'PASS'
+          AND rta.qa->>'purpose' = 'FULL_ROUTE_QA'
           AND t.recorded_execution = true
           AND t.provenance_class IN ('RECORDED_GPS', 'RECORDED_GPS_MERGED')`,
       [routeId]
