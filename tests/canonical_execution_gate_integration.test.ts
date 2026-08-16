@@ -8,13 +8,45 @@ import { evaluateCanonicalExecutionGate } from '../src/services/canonical_execut
 const hasDatabase = Boolean(process.env.DATABASE_URL || process.env.PGHOST);
 const ROUTE_ID = 'CI-EXEC-GATE';
 const TRACK_ID = 'CT-CI-EXEC-GATE';
+let schemaInitializedInThisProcess = false;
 
+/**
+ * Reset application truth without repeatedly dropping/recreating the PostGIS
+ * extension in the same backend process.
+ *
+ * PostGIS planner support functions cache geometry/operator-family OIDs per
+ * backend. Recreating the extension between tests while the pg Pool keeps the
+ * backend alive can leave those cached OIDs stale and produce planner errors
+ * such as "no spatial operator found for st_intersects" even though both
+ * columns are geometry(...,4326). That is a test-harness artifact, not a route
+ * gate semantic.
+ *
+ * We perform one full schema rebuild at process start. Subsequent cases truncate
+ * only application tables, preserving spatial_ref_sys, schema_migration and the
+ * stable PostGIS extension/type/operator OIDs.
+ */
 async function resetAndSeed(): Promise<void> {
   const pool = getPgPool();
   assert.ok(pool);
-  await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
-  const migrations = await runDatabaseMigrations();
-  assert.equal(migrations.success, true, migrations.message);
+
+  if (!schemaInitializedInThisProcess) {
+    await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
+    const migrations = await runDatabaseMigrations();
+    assert.equal(migrations.success, true, migrations.message);
+    schemaInitializedInThisProcess = true;
+  } else {
+    const tables = await pool.query<{ table_list: string | null }>(
+      `SELECT string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename) AS table_list
+         FROM pg_tables
+        WHERE schemaname = 'public'
+          AND tablename NOT IN ('spatial_ref_sys', 'schema_migration')`
+    );
+    const tableList = tables.rows[0]?.table_list;
+    if (tableList) {
+      await pool.query(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
+    }
+  }
+
   const seed = await seedCanonicalDatabase();
   assert.equal(seed.success, true);
 }
