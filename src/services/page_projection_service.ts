@@ -57,7 +57,7 @@ export async function projectRoutePage(
     reasons: gateResult.reasons,
     advisories: gateResult.advisories,
     runtime_freshness_status: freshnessStatus,
-    latest_snapshot: snapshot ? (snapshot as Record<string, unknown>) : undefined,
+    latest_snapshot: snapshot ? (snapshot as unknown as Record<string, unknown>) : undefined,
     read_only_hash: readOnlyHash,
     projected_at: new Date().toISOString()
   };
