@@ -57,6 +57,7 @@ export interface CanonicalSeedResult {
   routes: number;
   fieldValues: number;
   dependencies: number;
+  skippedRuntimeOnlyFieldValues: string[];
   manifestVersion?: string;
   message: string;
 }
@@ -67,7 +68,10 @@ export function loadCanonicalSeedManifest(
   return JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as CanonicalSeedManifest;
 }
 
-async function upsertManifest(client: PoolClient, manifest: CanonicalSeedManifest): Promise<void> {
+async function upsertManifest(
+  client: PoolClient,
+  manifest: CanonicalSeedManifest
+): Promise<{ importedFieldValues: number; skippedRuntimeOnlyFieldValues: string[] }> {
   for (const area of manifest.areas) {
     await client.query(
       `INSERT INTO area (area_id, area_type, canonical_name, aliases, version)
@@ -115,21 +119,34 @@ async function upsertManifest(client: PoolClient, manifest: CanonicalSeedManifes
         route.route_family_id ?? null,
         route.area_id,
         route.canonical_name,
-        route.identity_state ?? 'CANONICAL',
+        route.identity_state ?? 'CANDIDATE',
         route.route_state
       ]
     );
   }
 
+  const skippedRuntimeOnlyFieldValues: string[] = [];
+  let importedFieldValues = 0;
+
   for (const field of manifest.field_values) {
-    // Preserve history if a future manifest adds a new version. For the frozen
-    // V0.2 seed, id/version 1 is deterministic and idempotent.
+    const mustRemainRuntimeOnly = field.import === 'NO_STATIC_VALUE' || field.state === 'RUNTIME_ONLY';
+    if (mustRemainRuntimeOnly) {
+      skippedRuntimeOnlyFieldValues.push(field.id);
+      // Repair any row written by an earlier seed-runner version. Runtime-only
+      // facts belong in runtime_snapshot and must not survive in static truth.
+      await client.query('DELETE FROM field_value WHERE field_value_id = $1', [field.id]);
+      continue;
+    }
+
     await client.query(
       `INSERT INTO field_value (
          field_value_id, entity_type, entity_id, field_key, state,
          value, confidence, version, is_current, lineage
        ) VALUES ($1, $2, $3, $4, $5::field_state_enum, $6::jsonb, $7, 1, true, $8::jsonb)
        ON CONFLICT (field_value_id) DO UPDATE SET
+         entity_type = EXCLUDED.entity_type,
+         entity_id = EXCLUDED.entity_id,
+         field_key = EXCLUDED.field_key,
          state = EXCLUDED.state,
          value = EXCLUDED.value,
          confidence = EXCLUDED.confidence,
@@ -146,6 +163,7 @@ async function upsertManifest(client: PoolClient, manifest: CanonicalSeedManifes
         JSON.stringify({ import: field.import ?? null, seed_manifest_version: manifest.version })
       ]
     );
+    importedFieldValues += 1;
   }
 
   for (const dependency of manifest.dependencies) {
@@ -177,6 +195,8 @@ async function upsertManifest(client: PoolClient, manifest: CanonicalSeedManifes
       ]
     );
   }
+
+  return { importedFieldValues, skippedRuntimeOnlyFieldValues };
 }
 
 export async function seedCanonicalDatabase(): Promise<CanonicalSeedResult> {
@@ -190,6 +210,7 @@ export async function seedCanonicalDatabase(): Promise<CanonicalSeedResult> {
       routes: 0,
       fieldValues: 0,
       dependencies: 0,
+      skippedRuntimeOnlyFieldValues: [],
       message: 'DATABASE_URL is not configured; canonical production seed was not written.'
     };
   }
@@ -198,7 +219,7 @@ export async function seedCanonicalDatabase(): Promise<CanonicalSeedResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await upsertManifest(client, manifest);
+    const fieldResult = await upsertManifest(client, manifest);
     await client.query('COMMIT');
     return {
       success: true,
@@ -206,10 +227,11 @@ export async function seedCanonicalDatabase(): Promise<CanonicalSeedResult> {
       areas: manifest.areas.length,
       routeFamilies: manifest.route_families.length,
       routes: manifest.routes.length,
-      fieldValues: manifest.field_values.length,
+      fieldValues: fieldResult.importedFieldValues,
       dependencies: manifest.dependencies.length,
+      skippedRuntimeOnlyFieldValues: fieldResult.skippedRuntimeOnlyFieldValues,
       manifestVersion: manifest.version,
-      message: 'Evidence-backed canonical seed loaded into PostgreSQL/PostGIS.'
+      message: 'Evidence-backed canonical seed loaded into PostgreSQL/PostGIS; runtime-only facts remained quarantined.'
     };
   } catch (error) {
     await client.query('ROLLBACK');
