@@ -1,6 +1,9 @@
 /**
  * Page Projection Service for National Hiking Backend MVP
  * Invariant 13: Page projection must NEVER mutate canonical truth.
+ *
+ * Geometry-derived display fields are published only when child-route geometry
+ * has accepted consensus. Canonical identity may still publish independently.
  */
 
 import crypto from 'node:crypto';
@@ -27,7 +30,11 @@ export async function projectRoutePage(
     freshnessStatus = new Date(snapshot.valid_until) >= new Date() ? 'FRESH' : 'STALE';
   }
 
-  const hashPayload = `${route.id}:${route.variant_code}:${route.geometry_state}:${gateResult.gate_status}:${gateResult.navigation_executable}`;
+  const geometryMetricsPublishable =
+    route.geometry_state === 'ACCEPTED_CONSENSUS' &&
+    gateResult.geometry_consensus_valid;
+
+  const hashPayload = `${route.id}:${route.variant_code}:${route.geometry_state}:${gateResult.gate_status}:${gateResult.navigation_executable}:${geometryMetricsPublishable}`;
   const readOnlyHash = crypto.createHash('sha256').update(hashPayload).digest('hex').substring(0, 16);
 
   const projection: PageProjection = {
@@ -42,18 +49,19 @@ export async function projectRoutePage(
     geometry_state: route.geometry_state,
     gate_status: gateResult.gate_status,
     navigation_allowed: gateResult.navigation_executable,
-    distance_meters: route.distance_meters,
-    elevation_gain_meters: route.elevation_gain_meters,
-    estimated_duration_minutes: route.estimated_duration_minutes,
+    // Distance/elevation/duration derived from unapproved geometry must never be
+    // projected as route facts. Identity and semantic content remain publishable.
+    distance_meters: geometryMetricsPublishable ? route.distance_meters : undefined,
+    elevation_gain_meters: geometryMetricsPublishable ? route.elevation_gain_meters : undefined,
+    estimated_duration_minutes: geometryMetricsPublishable ? route.estimated_duration_minutes : undefined,
     reasons: gateResult.reasons,
     advisories: gateResult.advisories,
     runtime_freshness_status: freshnessStatus,
-    latest_snapshot: snapshot ? (snapshot as any) : undefined,
+    latest_snapshot: snapshot ? (snapshot as Record<string, unknown>) : undefined,
     read_only_hash: readOnlyHash,
     projected_at: new Date().toISOString()
   };
 
-  // Verify Invariant 13: Page projection must never mutate canonical truth
   assertPageProjectionImmutable(route, projection);
 
   await repos.pageProjections.save(projection);
