@@ -51,10 +51,11 @@ function geometryStateFor(
 /**
  * Build the public Route page read-model from canonical PostgreSQL truth only.
  *
- * Critical publication rule:
+ * Critical publication rules:
  * - canonical/known identity may be displayed without executable geometry;
- * - distance/elevation/map download/navigation are emitted only from the
- *   Route's ACTIVE CanonicalTrack;
+ * - approved static geometry metrics may be displayed once an ACTIVE
+ *   CanonicalTrack exists, even if the route is not currently executable;
+ * - map download/navigation remain hidden until route_state is EXECUTABLE;
  * - raw tracks, planned lines, candidate metrics and sibling variants never
  *   leak into public geometry fields.
  *
@@ -86,14 +87,15 @@ export async function buildCanonicalRoutePageProjection(
 
   const dependencies = await repo.listDependenciesForEntity('route', route.route_id);
   const geometryState = geometryStateFor(route.route_state, activeTrack);
-  const executableGeometry = activeTrack !== null && route.route_state === 'EXECUTABLE';
+  const hasApprovedGeometry = activeTrack !== null;
+  const executableGeometry = hasApprovedGeometry && route.route_state === 'EXECUTABLE';
   const reasonCodes: string[] = [];
 
   if (!activeTrack) reasonCodes.push('NO_ACTIVE_CANONICAL_TRACK');
   if (route.route_state === 'GEOMETRY_BLOCKED') reasonCodes.push('CHILD_ROUTE_GEOMETRY_BLOCKED');
   if (route.route_state === 'RULE_BLOCKED') reasonCodes.push('ROUTE_RULE_BLOCKED');
   if (activeTrack && route.route_state !== 'EXECUTABLE') {
-    reasonCodes.push('CANONICAL_TRACK_PRESENT_BUT_ROUTE_NOT_EXECUTABLE');
+    reasonCodes.push('CANONICAL_TRACK_APPROVED_NAVIGATION_NOT_EXECUTABLE');
   }
 
   return {
@@ -112,8 +114,8 @@ export async function buildCanonicalRoutePageProjection(
       active_canonical_track_id: activeTrack?.canonical_track_id ?? null,
       map_download_visible: executableGeometry,
       navigation_visible: executableGeometry,
-      distance_meters: executableGeometry ? activeTrack!.distance_m : null,
-      elevation_gain_meters: executableGeometry ? activeTrack!.elevation_gain_m : null
+      distance_meters: hasApprovedGeometry ? activeTrack!.distance_m : null,
+      elevation_gain_meters: hasApprovedGeometry ? activeTrack!.elevation_gain_m : null
     },
     dependencies: dependencies.map(dep => ({
       dependency_id: dep.dependency_id,
