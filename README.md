@@ -23,7 +23,7 @@ The presentation layer and canonical database layer intentionally coexist during
 - ambiguous geometry does not become execution evidence
 - sibling Route evidence never counts toward target child Route consensus
 - child-route public geometry consensus defaults to >=2 independent accepted Recorded GPS executions
-- conservative public first-party consensus also requires >=2 distinct actor hashes
+- conservative public first-party consensus requires >=2 independent actor↔execution pairs: neither the actor nor the independent execution key may be reused to manufacture the count
 - CORE_QA is diagnostic only; only a server-approved `FULL_ROUTE_QA` profile may derive `TARGET_ACCEPTED`
 - callers cannot directly force `TARGET_ACCEPTED`
 - geometry consensus readiness never auto-promotes a Route or creates `CanonicalTrack`
@@ -65,7 +65,7 @@ GPX/KML
   -> First-party Activity linked to the persisted RawTrack gate truth
   -> Geometry consensus readiness
        - >=2 independent executions
-       - >=2 distinct actors (FIRST_PARTY_PUBLIC default)
+       - >=2 independent actor↔execution pairs (FIRST_PARTY_PUBLIC default)
        - pairwise geometry compatibility
   -> READY_FOR_EDITORIAL_CANONICALIZATION
   -> explicit token-protected editorial activation
