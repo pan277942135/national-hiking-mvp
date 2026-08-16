@@ -129,7 +129,7 @@ test('Reviewed activation copies one approved RawTrack exactly and never infers 
   await pool.query(
     `INSERT INTO dependency (
        dependency_id, entity_type, entity_id, field_key, dependency_class,
-       source_class, state, stop_status, reopen_trigger, metadata
+       preferred_source_class, state, stop_status, reopen_trigger, metadata
      ) VALUES (
        'CI-DEP-CANONICAL-ACTIVATION', 'route', $1, 'canonical_geometry', 'ROUTE_COVERAGE',
        'FIRST_PARTY_ACTIVITY', 'EXTERNAL_DEPENDENCY', 'SOURCE_SWITCH',
