@@ -1,0 +1,430 @@
+{
+  "manifest_version": "1.0.0",
+  "generated_at": "2026-08-16T09:00:00.000Z",
+  "areas": [
+    {
+      "id": "area_zijinshan",
+      "name": "南京紫金山 (钟山国家风景名胜区)",
+      "slug": "zijinshan",
+      "area_type": "URBAN_SINGLE_MOUNTAIN",
+      "protection_level": "SCENIC",
+      "jurisdiction_code": "CN-32-01-02",
+      "description": "南京城市中心单体山地，拥有密集的绿道、防火道及历史文化古迹，南麓绿道与北麓山脊线构成主干。"
+    },
+    {
+      "id": "area_suzhou_western",
+      "name": "苏州太湖西山与低山廊道",
+      "slug": "suzhou-western-mountains",
+      "area_type": "COMPOSITE_LOW_MOUNTAIN",
+      "protection_level": "OPEN",
+      "jurisdiction_code": "CN-32-05-06",
+      "description": "太湖岛屿与沿岸丘陵复合低山廊道，以缥缈峰、穹窿山及茶园古村步道为主。"
+    },
+    {
+      "id": "area_wugongshan",
+      "name": "武功山高山草甸系统 (萍乡-安福)",
+      "slug": "wugongshan",
+      "area_type": "ALPINE_CROSS_JURISDICTION",
+      "protection_level": "SCENIC",
+      "jurisdiction_code": "CN-36-03-CROSS",
+      "description": "跨越萍乡与吉安两市的高山连绵草甸山脊，气候多变，具备高海拔过夜穿越属性，对实时气象与能见度有强依赖。"
+    },
+    {
+      "id": "area_wuyishan",
+      "name": "武夷山国家公园",
+      "slug": "wuyishan-national-park",
+      "area_type": "STRICT_PROTECTED_AREA",
+      "protection_level": "STRICT_PROTECTION",
+      "jurisdiction_code": "CN-35-07-NP",
+      "description": "国家级国家公园严格保护区，核心保护区禁止进入，一般控制区及生态观测区需前置官方行政审批许可。"
+    }
+  ],
+  "jurisdictions": [
+    { "code": "CN-32-01-02", "name": "南京市玄武区文化与林业局", "level": "DISTRICT" },
+    { "code": "CN-32-05-06", "name": "苏州市吴中区文旅体育局", "level": "DISTRICT" },
+    { "code": "CN-36-03-CROSS", "name": "萍乡-安福武功山联合管委会", "level": "MUNICIPAL" },
+    { "code": "CN-35-07-NP", "name": "武夷山国家公园管理局", "level": "NATIONAL" }
+  ],
+  "legal_scopes": [
+    {
+      "id": "scope_zj_scenic",
+      "area_id": "area_zijinshan",
+      "name": "紫金山风景名胜区常规开放游览区",
+      "scope_type": "PUBLIC_ACCESS",
+      "positive_authorization_required": false
+    },
+    {
+      "id": "scope_sz_corridor",
+      "area_id": "area_suzhou_western",
+      "name": "西山低山古村开放绿道",
+      "scope_type": "PUBLIC_ACCESS",
+      "positive_authorization_required": false
+    },
+    {
+      "id": "scope_wg_ridge",
+      "area_id": "area_wugongshan",
+      "name": "武功山高山草甸山脊线开放区",
+      "scope_type": "GENERAL_CONTROL_ZONE",
+      "positive_authorization_required": false
+    },
+    {
+      "id": "scope_wy_core",
+      "area_id": "area_wuyishan",
+      "name": "武夷山大竹岚核心保护区",
+      "scope_type": "CORE_PROTECTED_ZONE",
+      "positive_authorization_required": true,
+      "description": "严格禁入核心自然保护区，未经国家生态环境部及国家林草局审批禁止任何人进入。"
+    },
+    {
+      "id": "scope_wy_buffer",
+      "area_id": "area_wuyishan",
+      "name": "武夷山九曲溪生态缓冲与科考区",
+      "scope_type": "BUFFER_ZONE",
+      "positive_authorization_required": true,
+      "description": "需持有国家公园管理局颁发的特许生态科考或研学通行许可方可进入。"
+    }
+  ],
+  "route_families": [
+    {
+      "id": "rf_zj_s12",
+      "area_id": "area_zijinshan",
+      "name": "紫金山南麓绿道轻徒步",
+      "canonical_code": "ZJ-S12-RF",
+      "description": "串联下马坊、邮政博物馆、地震台及流徽榭的森林绿道线路群。"
+    },
+    {
+      "id": "rf_sz_piaomiao",
+      "area_id": "area_suzhou_western",
+      "name": "太湖西山缥缈峰环山系统",
+      "canonical_code": "SZ-WM-RF",
+      "description": "贯穿堂里古村、缥缈峰顶与太湖沿岸茶山的徒步路网。"
+    },
+    {
+      "id": "rf_wg_cross",
+      "area_id": "area_wugongshan",
+      "name": "武功山高山草甸全景穿越系统",
+      "canonical_code": "WG-ALP-RF",
+      "description": "沈子村至发云界跨区域高山草甸山脊穿越线群。"
+    },
+    {
+      "id": "rf_wy_core",
+      "area_id": "area_wuyishan",
+      "name": "大竹岚生物多样性科考专线",
+      "canonical_code": "WY-NP-RF-CORE",
+      "description": "贯穿核心保护区实验样本区（仅供科研档案归档）。"
+    },
+    {
+      "id": "rf_wy_buffer",
+      "area_id": "area_wuyishan",
+      "name": "九曲溪上游生态研学道",
+      "canonical_code": "WY-NP-RF-BUFFER",
+      "description": "九曲溪水源保护生态廊道。"
+    }
+  ],
+  "routes": [
+    {
+      "id": "route_zj_s12_a",
+      "family_id": "rf_zj_s12",
+      "variant_code": "ZJ-S12-A",
+      "name": "下马坊驿站 → 民国邮政博物馆 → 南京地震科学馆 → 流徽榭",
+      "identity_state": "CANONICAL",
+      "geometry_state": "GEOMETRY_BLOCKED",
+      "start_point_name": "下马坊地铁站2号口/驿站",
+      "end_point_name": "流徽榭水榭平台",
+      "distance_meters": 4850.0,
+      "elevation_gain_meters": 110.0,
+      "estimated_duration_minutes": 90
+    },
+    {
+      "id": "route_zj_s12_b",
+      "family_id": "rf_zj_s12",
+      "variant_code": "ZJ-S12-B",
+      "name": "琵琶湖 → 前湖 → 燕雀湖环线",
+      "identity_state": "CANONICAL",
+      "geometry_state": "ACCEPTED_CONSENSUS",
+      "start_point_name": "琵琶湖入口",
+      "end_point_name": "燕雀湖梅花谷",
+      "distance_meters": 5200.0,
+      "elevation_gain_meters": 65.0,
+      "estimated_duration_minutes": 80,
+      "consensus_track_id": "track_zj_sibling_b_gps"
+    },
+    {
+      "id": "route_sz_wm_01",
+      "family_id": "rf_sz_piaomiao",
+      "variant_code": "SZ-WM-01",
+      "name": "堂里古村 → 缥缈峰顶 → 水月禅寺",
+      "identity_state": "CANONICAL",
+      "geometry_state": "ACCEPTED_CONSENSUS",
+      "start_point_name": "堂里古村停车场",
+      "end_point_name": "水月禅寺山门",
+      "distance_meters": 7600.0,
+      "elevation_gain_meters": 380.0,
+      "estimated_duration_minutes": 150,
+      "consensus_track_id": "track_sz_01_gps"
+    },
+    {
+      "id": "route_wg_alp_01",
+      "family_id": "rf_wg_cross",
+      "variant_code": "WG-ALP-01",
+      "name": "沈子村 → 铁蹄峰 → 金顶 → 绝望坡 → 发云界",
+      "identity_state": "CANONICAL",
+      "geometry_state": "ACCEPTED_CONSENSUS",
+      "start_point_name": "沈子村登山口",
+      "end_point_name": "发云界客栈集散点",
+      "distance_meters": 23500.0,
+      "elevation_gain_meters": 1820.0,
+      "estimated_duration_minutes": 540,
+      "consensus_track_id": "track_wg_gps"
+    },
+    {
+      "id": "route_wy_core_01",
+      "family_id": "rf_wy_core",
+      "variant_code": "WY-NP-CORE",
+      "name": "大竹岚深处红外相机观测样线",
+      "identity_state": "CANONICAL",
+      "geometry_state": "ACCEPTED_CONSENSUS",
+      "start_point_name": "大竹岚保护站岗亭",
+      "end_point_name": "挂墩生物样地",
+      "distance_meters": 6200.0,
+      "elevation_gain_meters": 450.0,
+      "estimated_duration_minutes": 180,
+      "consensus_track_id": "track_wy_core_gps"
+    },
+    {
+      "id": "route_wy_buffer_01",
+      "family_id": "rf_wy_buffer",
+      "variant_code": "WY-NP-BUFFER",
+      "name": "九曲溪上游生态研学慢行道",
+      "identity_state": "CANONICAL",
+      "geometry_state": "ACCEPTED_CONSENSUS",
+      "start_point_name": "星村镇研学中心",
+      "end_point_name": "白云禅寺生态驿站",
+      "distance_meters": 8100.0,
+      "elevation_gain_meters": 130.0,
+      "estimated_duration_minutes": 140,
+      "consensus_track_id": "track_wy_buffer_gps"
+    }
+  ],
+  "raw_tracks": [
+    {
+      "id": "track_zj_rej_42160328",
+      "sha256": "42160328a7b931e9e7dfc41893c5d88820c29188e7ab698a87b1c3e100f91a21",
+      "file_name": "zj_candidate_42160328.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 842,
+      "total_distance_meters": 4920.0,
+      "duration_seconds": 5400,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>42160328</name><trkseg><trkpt lat=\"32.039\" lon=\"118.835\"><ele>25</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_zj_rej_45517618",
+      "sha256": "45517618f0cb1824abec99912093cebc771029198301ecbe9182390a18290384",
+      "file_name": "zj_candidate_45517618.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 620,
+      "total_distance_meters": 5100.0,
+      "duration_seconds": 4900,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>45517618</name><trkseg><trkpt lat=\"32.041\" lon=\"118.838\"><ele>30</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_zj_rej_52046317",
+      "sha256": "52046317bcde1192837482938475628192837461928374619283746192837461",
+      "file_name": "zj_candidate_52046317.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 310,
+      "total_distance_meters": 2100.0,
+      "duration_seconds": 2100,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>52046317</name><trkseg><trkpt lat=\"32.040\" lon=\"118.836\"><ele>28</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_zj_kml_control",
+      "sha256": "control9918237461928374619283746192837461928374619283746192837461",
+      "file_name": "zj_s12_planned_navigation.kml",
+      "format": "KML",
+      "provenance_type": "PLANNED_NAVIGATION_LINE",
+      "point_count": 150,
+      "total_distance_meters": 4850.0,
+      "raw_payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml><Placemark><name>ZJ-S12 Planned Line</name><LineString><coordinates>118.835,32.039,25 118.850,32.045,35</coordinates></LineString></Placemark></kml>"
+    },
+    {
+      "id": "track_zj_sibling_b_gps",
+      "sha256": "b_sibling992837461928374619283746192837461928374619283746192837461",
+      "file_name": "zj_sibling_b_genuine.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 920,
+      "total_distance_meters": 5200.0,
+      "duration_seconds": 4800,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>ZJ-S12-B Genuine GPS</name><trkseg><trkpt lat=\"32.045\" lon=\"118.825\"><ele>20</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_sz_01_gps",
+      "sha256": "sz01genuine9928374619283746192837461928374619283746192837461928374",
+      "file_name": "sz_wm_01_gps.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 1240,
+      "total_distance_meters": 7600.0,
+      "duration_seconds": 9000,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>SZ-WM-01 GPS</name><trkseg><trkpt lat=\"31.120\" lon=\"120.280\"><ele>15</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_wg_gps",
+      "sha256": "wg01genuine9928374619283746192837461928374619283746192837461928374",
+      "file_name": "wg_alp_01_gps.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 3400,
+      "total_distance_meters": 23500.0,
+      "duration_seconds": 32400,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>WG-ALP-01 GPS</name><trkseg><trkpt lat=\"27.450\" lon=\"114.160\"><ele>600</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_wy_core_gps",
+      "sha256": "wycoregenuine99283746192837461928374619283746192837461928374619283",
+      "file_name": "wy_core_patrol.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 890,
+      "total_distance_meters": 6200.0,
+      "duration_seconds": 10800,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>WY-CORE Ranger GPS</name><trkseg><trkpt lat=\"27.750\" lon=\"117.650\"><ele>1100</ele></trkpt></trkseg></trk></gpx>"
+    },
+    {
+      "id": "track_wy_buffer_gps",
+      "sha256": "wybuffergenuine9928374619283746192837461928374619283746192837461928",
+      "file_name": "wy_buffer_trail.gpx",
+      "format": "GPX",
+      "provenance_type": "RECORDED_GPS",
+      "point_count": 1150,
+      "total_distance_meters": 8100.0,
+      "duration_seconds": 8400,
+      "raw_payload": "<?xml version=\"1.0\"?><gpx version=\"1.1\"><trk><name>WY-BUFFER GPS</name><trkseg><trkpt lat=\"27.650\" lon=\"117.950\"><ele>210</ele></trkpt></trkseg></trk></gpx>"
+    }
+  ],
+  "raw_track_route_assignments": [
+    {
+      "id": "assign_zj_42160328",
+      "track_id": "track_zj_rej_42160328",
+      "route_id": "route_zj_s12_a",
+      "match_status": "REJECTED",
+      "rejection_reason": "DEVIATION_FROM_CHILD_ALIGNMENT",
+      "evaluator_notes": "Track strayed off south path at postal museum onto unauthorized forest service road (deviation > 180m)."
+    },
+    {
+      "id": "assign_zj_45517618",
+      "track_id": "track_zj_rej_45517618",
+      "route_id": "route_zj_s12_a",
+      "match_status": "REJECTED",
+      "rejection_reason": "NOISY_DRIFT_AND_SIBLING_OVERLAP",
+      "evaluator_notes": "Dense canopy caused severe GPS multipath scattering (>85m horizontal dilution of precision); overlaps sibling B."
+    },
+    {
+      "id": "assign_zj_52046317",
+      "track_id": "track_zj_rej_52046317",
+      "route_id": "route_zj_s12_a",
+      "match_status": "REJECTED",
+      "rejection_reason": "INCOMPLETE_COVERAGE",
+      "evaluator_notes": "Hiker terminated recording early at Postal Museum (only 43% route completion)."
+    },
+    {
+      "id": "assign_zj_control",
+      "track_id": "track_zj_kml_control",
+      "route_id": "route_zj_s12_a",
+      "match_status": "CANDIDATE",
+      "rejection_reason": "PLANNED_LINE_NOT_GPS",
+      "evaluator_notes": "Control line only. Per Invariant 2, cannot serve as Recorded GPS consensus."
+    },
+    {
+      "id": "assign_zj_sibling_b",
+      "track_id": "track_zj_sibling_b_gps",
+      "route_id": "route_zj_s12_b",
+      "match_status": "ACCEPTED",
+      "evaluator_notes": "Valid consensus track for Sibling B (燕雀湖环线). Must never count towards ZJ-S12-A."
+    },
+    {
+      "id": "assign_sz_01",
+      "track_id": "track_sz_01_gps",
+      "route_id": "route_sz_wm_01",
+      "match_status": "ACCEPTED",
+      "evaluator_notes": "Accurate first-party verified GPS recording."
+    },
+    {
+      "id": "assign_wg_01",
+      "track_id": "track_wg_gps",
+      "route_id": "route_wg_alp_01",
+      "match_status": "ACCEPTED",
+      "evaluator_notes": "Full ridge traversal recorded GPS."
+    },
+    {
+      "id": "assign_wy_core",
+      "track_id": "track_wy_core_gps",
+      "route_id": "route_wy_core_01",
+      "match_status": "ACCEPTED",
+      "evaluator_notes": "Ranger official patrol track."
+    },
+    {
+      "id": "assign_wy_buffer",
+      "track_id": "track_wy_buffer_gps",
+      "route_id": "route_wy_buffer_01",
+      "match_status": "ACCEPTED",
+      "evaluator_notes": "Eco-tourism path verified GPS."
+    }
+  ],
+  "rules": [
+    {
+      "id": "rule_wy_core_ban",
+      "area_id": "area_wuyishan",
+      "route_id": "route_wy_core_01",
+      "rule_type": "HARD_CLOSURE",
+      "is_blocking": true,
+      "requires_positive_auth": true,
+      "title": "大竹岚国家级核心保护区全面封控禁令",
+      "description": "依据《中华人民共和国自然保护区条例》第27条，禁止未经特批进入核心区。"
+    },
+    {
+      "id": "rule_wy_permit",
+      "area_id": "area_wuyishan",
+      "route_id": "route_wy_buffer_01",
+      "rule_type": "PERMIT_REQUIRED",
+      "is_blocking": true,
+      "requires_positive_auth": true,
+      "title": "九曲溪水源保护生态研学特许审批",
+      "description": "进入需凭国家公园实名审批备案码或巡护工作证。"
+    }
+  ],
+  "runtime_snapshots": [
+    {
+      "id": "snap_sz_01_fresh",
+      "area_id": "area_suzhou_western",
+      "route_id": "route_sz_wm_01",
+      "observed_at": "2026-08-16T08:00:00.000Z",
+      "valid_until": "2026-08-16T18:00:00.000Z",
+      "hazard_level": "NORMAL",
+      "trail_status": "OPEN",
+      "weather_summary": "晴间多云，微风，能见度良好",
+      "temperature_celsius": 26.5,
+      "wind_speed_kmh": 12.0,
+      "visibility_meters": 10000,
+      "source_name": "Suzhou West Mountain Ranger Field Log"
+    },
+    {
+      "id": "snap_wg_stale",
+      "area_id": "area_wugongshan",
+      "route_id": "route_wg_alp_01",
+      "observed_at": "2026-08-15T06:00:00.000Z",
+      "valid_until": "2026-08-15T18:00:00.000Z",
+      "hazard_level": "WARNING",
+      "trail_status": "CAUTION",
+      "weather_summary": "高山草甸浓雾与短时强阵风，金顶气温骤降",
+      "temperature_celsius": 11.2,
+      "wind_speed_kmh": 45.0,
+      "visibility_meters": 300,
+      "source_name": "Wugongshan Alpine Weather Station 03"
+    }
+  ]
+}
