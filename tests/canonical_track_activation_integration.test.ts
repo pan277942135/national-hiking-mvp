@@ -16,7 +16,7 @@ import { buildCanonicalRoutePageProjection } from '../src/services/canonical_pag
 const hasDatabase = Boolean(process.env.DATABASE_URL || process.env.PGHOST);
 const ROUTE_ID = 'CI-CANONICAL-ACTIVATION';
 
-async function resetAndSeed(): Promise<void> {
+async function resetAndSeed(options: { includeSyntheticRoute?: boolean } = {}): Promise<void> {
   const pool = getPgPool();
   assert.ok(pool);
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
@@ -24,13 +24,16 @@ async function resetAndSeed(): Promise<void> {
   assert.equal(migration.success, true, migration.message);
   const seed = await seedCanonicalDatabase();
   assert.equal(seed.success, true);
-  await pool.query(
-    `INSERT INTO route (
-       route_id, route_family_id, area_id, canonical_name, identity_state, route_state, version
-     ) VALUES ($1, 'ZJ-S12-RF', 'AREA-NJ-ZIJINSHAN', 'CI canonical activation fixture',
-               'CANDIDATE', 'GEOMETRY_BLOCKED', 1)`,
-    [ROUTE_ID]
-  );
+
+  if (options.includeSyntheticRoute !== false) {
+    await pool.query(
+      `INSERT INTO route (
+         route_id, route_family_id, area_id, canonical_name, identity_state, route_state, version
+       ) VALUES ($1, 'ZJ-S12-RF', 'AREA-NJ-ZIJINSHAN', 'CI canonical activation fixture',
+                 'CANDIDATE', 'GEOMETRY_BLOCKED', 1)`,
+      [ROUTE_ID]
+    );
+  }
 }
 
 function profile(): GeometryGateProfile {
@@ -146,8 +149,10 @@ test('Reviewed activation copies one approved RawTrack exactly and never infers 
 });
 
 test('Production S12-A cannot be canonicalized without real full-route consensus', { skip: !hasDatabase }, async () => {
+  await resetAndSeed({ includeSyntheticRoute: false });
   const pool = getPgPool();
   assert.ok(pool);
+
   const count = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM canonical_track WHERE route_id = 'ZJ-S12-A'`
   );
