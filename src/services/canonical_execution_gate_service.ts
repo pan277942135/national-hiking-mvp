@@ -203,6 +203,11 @@ export async function evaluateCanonicalExecutionGate(
   }
 
   // Add spatially applicable rules only after canonical geometry exists.
+  // Geography distance=0 is used as an exact intersection predicate rather
+  // than ST_Intersects because the CI PostGIS 16/3.5 image exposed an internal
+  // mixed-dimensional opfamily failure for Polygon/MultiPolygon vs LineString.
+  // Both persisted geometries remain canonical SRID 4326 objects; this changes
+  // only predicate implementation, not the legal scope semantics.
   const spatialRulesResult = await pool.query<RuleRow>(
     `SELECT DISTINCT r.rule_id, r.rule_type, r.severity,
             r.source_evidence_id, la.precedence_rank
@@ -213,8 +218,8 @@ export async function evaluateCanonicalExecutionGate(
       WHERE (r.effective_from IS NULL OR r.effective_from <= $3)
         AND (r.effective_to IS NULL OR r.effective_to >= $3)
         AND (
-          (r.scope_geometry IS NOT NULL AND ST_Intersects(r.scope_geometry, ct.geometry))
-          OR (ls.geometry IS NOT NULL AND ST_Intersects(ls.geometry, ct.geometry))
+          (r.scope_geometry IS NOT NULL AND ST_Distance(r.scope_geometry::geography, ct.geometry::geography) = 0)
+          OR (ls.geometry IS NOT NULL AND ST_Distance(ls.geometry::geography, ct.geometry::geography) = 0)
         )
       ORDER BY la.precedence_rank DESC NULLS LAST, r.rule_id`,
     [route.route_id, route.active_canonical_track_id, nowIso]
@@ -235,7 +240,7 @@ export async function evaluateCanonicalExecutionGate(
       WHERE ls.area_id = $3
         AND (z.effective_from IS NULL OR z.effective_from <= $4)
         AND (z.effective_to IS NULL OR z.effective_to >= $4)
-        AND ST_Intersects(z.geometry, ct.geometry)`,
+        AND ST_Distance(z.geometry::geography, ct.geometry::geography) = 0`,
     [route.route_id, route.active_canonical_track_id, route.area_id, nowIso]
   );
   const blockedZone = zones.rows.find(zone =>
