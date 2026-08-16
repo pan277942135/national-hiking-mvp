@@ -10,7 +10,7 @@ Evidence-first hiking route governance and recommendation backend with an AI Stu
 - **AI Studio demo fixtures:** `seed/ui_demo_manifest.json` (`UI_DEMO_ONLY`)
 - **Canonical API namespace:** `/api/canonical/*` backed only by PostgreSQL/PostGIS; never falls back to demo fixtures
 - **Canonical write policy:** fail-closed; mutation endpoints require `CANONICAL_WRITE_TOKEN`
-- **Canonical geometry promotion:** explicit editorial action only after FULL_ROUTE_QA + consensus readiness
+- **Canonical geometry promotion:** explicit editorial action only after FULL_ROUTE_QA + public first-party consensus readiness
 - **Cloud SQL / paid deployment:** not authorized; CI uses an ephemeral PostGIS service container
 
 The presentation layer and canonical database layer intentionally coexist during migration. `/api/overview` remains demo/presentation data; `/api/canonical/*` is the evidence-backed database namespace when PostgreSQL/PostGIS is configured.
@@ -27,7 +27,8 @@ The presentation layer and canonical database layer intentionally coexist during
 - CORE_QA is diagnostic only; only a server-approved `FULL_ROUTE_QA` profile may derive `TARGET_ACCEPTED`
 - callers cannot directly force `TARGET_ACCEPTED`
 - geometry consensus readiness never auto-promotes a Route or creates `CanonicalTrack`
-- explicit canonicalization copies one editor-selected accepted RawTrack exactly; it does not average/stitch a new line
+- explicit canonicalization requires reviewer identity + review rationale and copies one editor-selected accepted RawTrack exactly; it does not average/stitch a new line
+- public CanonicalTrack activation always uses `FIRST_PARTY_PUBLIC` consensus; `RAW_INDEPENDENT` remains diagnostic only
 - geometry approval does not infer legal clearance, runtime safety, or `EXECUTABLE`
 - Unknown remains Unknown
 - popularity never overrides Rule/Legal truth
@@ -68,11 +69,15 @@ GPX/KML
        - pairwise geometry compatibility
   -> READY_FOR_EDITORIAL_CANONICALIZATION
   -> explicit token-protected editorial activation
-  -> exact accepted RawTrack copied to CanonicalTrack
+       - reviewerId required
+       - reviewNote/rationale required
+       - FIRST_PARTY_PUBLIC only
+  -> exact accepted RawTrack copied to CanonicalTrack + baseline RouteSegment
+  -> geometry-specific Route dependency resolved
   -> Route becomes at most STATIC_PUBLISHABLE from geometry approval alone
 ```
 
-Readiness and activation are separate by design. Activation re-evaluates consensus inside a PostgreSQL `SERIALIZABLE` transaction to avoid a stale time-of-check/time-of-use promotion.
+Readiness and activation are separate by design. Activation re-evaluates consensus inside a PostgreSQL `SERIALIZABLE` transaction to avoid a stale time-of-check/time-of-use promotion. An already-active CanonicalTrack is not overwritten by this initial activation flow; later geometry changes require a separate versioned revision workflow.
 
 ## Canonical API
 
@@ -91,7 +96,7 @@ Mutation endpoints require `Authorization: Bearer <CANONICAL_WRITE_TOKEN>` and f
 - `POST /api/canonical/routes/:routeId/raw-assignments` — cannot set `TARGET_ACCEPTED`
 - `POST /api/canonical/routes/:routeId/geometry-gate` — server-owned profiles only
 - `POST /api/canonical/activities`
-- `POST /api/canonical/routes/:routeId/canonical-track-activation` — explicit editorial promotion only
+- `POST /api/canonical/routes/:routeId/canonical-track/activate` — explicit editorial promotion; `sourceRawTrackId`, `reviewerId`, and `reviewNote` are required for success
 
 ## Development
 
