@@ -15,6 +15,7 @@ import {
 import { evaluateGeometryConsensusReadiness } from '../services/geometry_consensus_service.js';
 import { recordFirstPartyActivity } from '../services/first_party_activity_service.js';
 import { buildCanonicalRoutePageProjection } from '../services/canonical_page_projection_service.js';
+import { activateCanonicalTrackFromAcceptedRaw } from '../services/canonical_track_activation_service.js';
 import { authorizeCanonicalWrite } from '../security/canonical_write_auth.js';
 
 function unavailable(res: Response) {
@@ -26,12 +27,13 @@ function unavailable(res: Response) {
 
 function requireCanonicalWrite(req: Request, res: Response): boolean {
   const auth = authorizeCanonicalWrite(req.get('authorization'));
-  if (auth.authorized) return true;
+  if (auth.authorized === true) return true;
 
-  const status = auth.code === 'CANONICAL_WRITES_DISABLED' ? 503 : 401;
+  const code = auth.code;
+  const status = code === 'CANONICAL_WRITES_DISABLED' ? 503 : 401;
   res.status(status).json({
-    error: auth.code,
-    message: auth.code === 'CANONICAL_WRITES_DISABLED'
+    error: code,
+    message: code === 'CANONICAL_WRITES_DISABLED'
       ? 'Canonical mutation APIs are disabled until CANONICAL_WRITE_TOKEN is configured.'
       : 'Canonical mutation APIs require a valid Bearer token.'
   });
@@ -335,6 +337,45 @@ export function registerCanonicalDbRoutes(app: Express): void {
       });
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * Explicit editorial canonicalization only. This endpoint never creates a
+   * route from raw evidence, never averages sibling tracks, and never marks a
+   * route EXECUTABLE or legally clear. It selects one consensus-approved
+   * FULL_ROUTE_QA RawTrack and activates an exact copy as CanonicalTrack.
+   */
+  app.post('/api/canonical/routes/:routeId/canonical-track/activate', async (req, res) => {
+    if (!requireCanonicalWrite(req, res)) return;
+    const pool = getPgPool();
+    if (!pool) return unavailable(res);
+    try {
+      const body = req.body ?? {};
+      if (typeof body.sourceRawTrackId !== 'string' || typeof body.reviewerId !== 'string') {
+        return res.status(400).json({ error: 'sourceRawTrackId and reviewerId are required.' });
+      }
+
+      const result = await activateCanonicalTrackFromAcceptedRaw(pool, {
+        routeId: req.params.routeId,
+        sourceRawTrackId: body.sourceRawTrackId,
+        reviewerId: body.reviewerId,
+        reviewNote: typeof body.reviewNote === 'string' ? body.reviewNote : undefined,
+        consensusMode: body.consensusMode === 'RAW_INDEPENDENT' ? 'RAW_INDEPENDENT' : 'FIRST_PARTY_PUBLIC'
+      });
+
+      res.status(201).json({
+        repository_mode: 'CANONICAL_POSTGRES',
+        data_classification: 'EDITORIAL_CANONICALIZATION',
+        result,
+        geometry_canonicalized: true,
+        route_state: result.routeState,
+        navigation_executable_inferred: false,
+        legal_clearance_inferred: false,
+        runtime_safety_inferred: false
+      });
+    } catch (error) {
+      res.status(409).json({ error: (error as Error).message });
     }
   });
 }
