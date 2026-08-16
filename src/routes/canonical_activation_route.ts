@@ -67,6 +67,16 @@ export function registerCanonicalActivationRoute(app: Express): void {
         runtime_safety_inferred: false
       });
     } catch (error) {
+      const pgCode = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+      if (pgCode === '40001') {
+        return res.status(409).json({
+          error: 'SERIALIZATION_RETRY_REQUIRED',
+          message: 'Evidence changed concurrently while canonicalization was being evaluated. Re-read readiness and retry the editorial action.'
+        });
+      }
+
       const message = (error as Error).message;
       const notFound = message.startsWith('Route not found:');
       const notReady = message.startsWith('Geometry consensus is not ready');
