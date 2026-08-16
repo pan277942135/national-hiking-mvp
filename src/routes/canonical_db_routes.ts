@@ -14,12 +14,27 @@ import {
 } from '../services/geometry_gate_profile_registry.js';
 import { recordFirstPartyActivity } from '../services/first_party_activity_service.js';
 import { buildCanonicalRoutePageProjection } from '../services/canonical_page_projection_service.js';
+import { authorizeCanonicalWrite } from '../security/canonical_write_auth.js';
 
 function unavailable(res: Response) {
   return res.status(503).json({
     error: 'CANONICAL_POSTGRES_UNAVAILABLE',
     message: 'Canonical PostgreSQL/PostGIS repository is not configured for this runtime.'
   });
+}
+
+function requireCanonicalWrite(req: Request, res: Response): boolean {
+  const auth = authorizeCanonicalWrite(req.get('authorization'));
+  if (auth.authorized) return true;
+
+  const status = auth.code === 'CANONICAL_WRITES_DISABLED' ? 503 : 401;
+  res.status(status).json({
+    error: auth.code,
+    message: auth.code === 'CANONICAL_WRITES_DISABLED'
+      ? 'Canonical mutation APIs are disabled until CANONICAL_WRITE_TOKEN is configured.'
+      : 'Canonical mutation APIs require a valid Bearer token.'
+  });
+  return false;
 }
 
 export function registerCanonicalDbRoutes(app: Express): void {
@@ -141,6 +156,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
   });
 
   app.post('/api/canonical/tracks', async (req: Request, res: Response) => {
+    if (!requireCanonicalWrite(req, res)) return;
     const pool = getPgPool();
     if (!pool) return unavailable(res);
     try {
@@ -176,6 +192,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
    * here; target acceptance must be computed by the spatial geometry gate.
    */
   app.post('/api/canonical/routes/:routeId/raw-assignments', async (req, res) => {
+    if (!requireCanonicalWrite(req, res)) return;
     const pool = getPgPool();
     if (!pool) return unavailable(res);
     try {
@@ -224,6 +241,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
    * versioned profile. Arbitrary anchors are intentionally not accepted.
    */
   app.post('/api/canonical/routes/:routeId/geometry-gate', async (req, res) => {
+    if (!requireCanonicalWrite(req, res)) return;
     const pool = getPgPool();
     if (!pool) return unavailable(res);
     try {
@@ -267,6 +285,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
   });
 
   app.post('/api/canonical/activities', async (req, res) => {
+    if (!requireCanonicalWrite(req, res)) return;
     const pool = getPgPool();
     if (!pool) return unavailable(res);
     try {
