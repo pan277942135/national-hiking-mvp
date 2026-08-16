@@ -1,0 +1,34 @@
+{
+  "classification": "EVIDENCE_BACKED_QA_SUMMARY",
+  "route_family_id": "ZJ-S12-RF",
+  "target_route_id": "ZJ-S12-A",
+  "target_state": {
+    "identity_state": "CANONICAL",
+    "geometry_state": "GEOMETRY_BLOCKED",
+    "accepted_recorded_raw_count": 0,
+    "navigation_enabled": false
+  },
+  "anchors": {
+    "A01": "陵园新村邮局旧址",
+    "A02": "南京地震科学馆",
+    "A03": "流徽榭"
+  },
+  "candidates": [
+    {"candidate_id":"42160328","a01_m":815.5,"a02_m":1437.9,"a03_m":1573.6,"gate":"NOT_S12_CORE","decision":"REJECT_AS_S12_RAW"},
+    {"candidate_id":"45517618","a01_m":1453.7,"a02_m":1639.5,"a03_m":1596.0,"gate":"NOT_S12_CORE","decision":"REJECT_AS_S12_RAW"},
+    {"candidate_id":"52046317","a01_m":37.2,"a02_m":380.7,"a03_m":610.8,"gate":"NOT_S12_CORE","decision":"REJECT_AS_S12_RAW"}
+  ],
+  "planned_control": {
+    "candidate_id": "event4731986",
+    "a01_m": 16.3,
+    "a02_m": 45.4,
+    "a03_m": 41.9,
+    "provenance": "PLANNED_NAVIGATION_LINE",
+    "role": "CONTROL_ONLY",
+    "recorded_execution_contribution": 0
+  },
+  "notes": [
+    "Anchor QA validates or rejects a materialized candidate; anchors never fabricate navigation geometry.",
+    "No genuine ZJ-S12-B Recorded GPS track has been supplied and validated."
+  ]
+}

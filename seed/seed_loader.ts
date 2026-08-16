@@ -1,12 +1,18 @@
 /**
- * Idempotent Seed Loader for National Hiking Backend MVP
- * Guarantees zero mutations on duplicate runs and validates domain invariants.
+ * AI Studio memory/UI demo seed loader.
+ *
+ * IMPORTANT: `ui_demo_manifest.json` contains synthetic fixtures used only to
+ * exercise UI and hard-gate behavior. It is NOT production/evidence truth.
+ * Canonical production seed lives at `db/four_area_seed_manifest_v0_2.json`.
  */
 
 import { Repositories } from '../src/repository/repositories.js';
-import manifestData from './manifest.json' with { type: 'json' };
+import manifestData from './ui_demo_manifest.json' with { type: 'json' };
+
+export type SeedDataClassification = 'UI_DEMO_ONLY';
 
 export interface SeedResult {
+  dataClassification: SeedDataClassification;
   areasCount: number;
   familiesCount: number;
   routesCount: number;
@@ -23,14 +29,12 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
   let mutationsCreated = 0;
   let mutationsUpdated = 0;
 
-  // 1. Areas
   for (const area of manifestData.areas) {
     const existing = await repos.areas.findById(area.id);
     if (!existing) {
       await repos.areas.save(area as any);
       mutationsCreated++;
     } else {
-      // Check if anything changed
       const isIdentical =
         existing.name === area.name &&
         existing.slug === area.slug &&
@@ -45,13 +49,9 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
     }
   }
 
-  // 2. Route Families
   for (const rf of manifestData.route_families) {
-    // Validate parent Area
     const parentArea = await repos.areas.findById(rf.area_id);
-    if (!parentArea) {
-      throw new Error(`Parent Area ${rf.area_id} does not exist for RouteFamily ${rf.id}`);
-    }
+    if (!parentArea) throw new Error(`Parent Area ${rf.area_id} does not exist for RouteFamily ${rf.id}`);
 
     const existing = await repos.routeFamilies.findById(rf.id);
     if (!existing) {
@@ -70,13 +70,9 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
     }
   }
 
-  // 3. Child Routes
   for (const route of manifestData.routes) {
-    // Validate parent RouteFamily
     const parentRf = await repos.routeFamilies.findById(route.family_id);
-    if (!parentRf) {
-      throw new Error(`Parent RouteFamily ${route.family_id} does not exist for Route ${route.id}`);
-    }
+    if (!parentRf) throw new Error(`Parent RouteFamily ${route.family_id} does not exist for Route ${route.id}`);
 
     const existing = await repos.routes.findById(route.id);
     if (!existing) {
@@ -102,7 +98,6 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
     }
   }
 
-  // 4. Raw Tracks
   for (const track of manifestData.raw_tracks) {
     const existing = await repos.rawTracks.findById(track.id);
     if (!existing) {
@@ -122,13 +117,10 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
     }
   }
 
-  // 5. Raw Track Route Assignments
   for (const assign of manifestData.raw_track_route_assignments) {
     const track = await repos.rawTracks.findById(assign.track_id);
     const route = await repos.routes.findById(assign.route_id);
-    if (!track || !route) {
-      throw new Error(`Invalid assignment: track ${assign.track_id} or route ${assign.route_id} missing`);
-    }
+    if (!track || !route) throw new Error(`Invalid assignment: track ${assign.track_id} or route ${assign.route_id} missing`);
 
     const existingList = await repos.assignments.findByRouteId(assign.route_id);
     const existing = existingList.find(a => a.id === assign.id || a.track_id === assign.track_id);
@@ -147,53 +139,44 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
     }
   }
 
-  // 6. Legal Scopes
   for (const scope of manifestData.legal_scopes) {
     const area = await repos.areas.findById(scope.area_id);
-    if (!area) {
-      throw new Error(`Parent Area ${scope.area_id} not found for scope ${scope.id}`);
-    }
+    if (!area) throw new Error(`Parent Area ${scope.area_id} not found for scope ${scope.id}`);
     const existingList = await repos.legalScopes.findByAreaId(scope.area_id);
     const existing = existingList.find(s => s.id === scope.id);
     if (!existing) {
       await repos.legalScopes.save(scope as any);
       mutationsCreated++;
-    } else {
-      const isIdentical =
-        existing.name === scope.name &&
-        existing.scope_type === scope.scope_type &&
-        existing.positive_authorization_required === scope.positive_authorization_required;
-      if (!isIdentical) {
-        await repos.legalScopes.save(scope as any);
-        mutationsUpdated++;
-      }
+    } else if (
+      existing.name !== scope.name ||
+      existing.scope_type !== scope.scope_type ||
+      existing.positive_authorization_required !== scope.positive_authorization_required
+    ) {
+      await repos.legalScopes.save(scope as any);
+      mutationsUpdated++;
     }
   }
 
-  // 7. Rules
   for (const rule of manifestData.rules) {
     const area = await repos.areas.findById(rule.area_id);
-    if (!area) {
-      throw new Error(`Parent Area ${rule.area_id} not found for rule ${rule.id}`);
-    }
+    if (!area) throw new Error(`Parent Area ${rule.area_id} not found for rule ${rule.id}`);
     const existingList = await repos.rules.findByAreaId(rule.area_id);
     const existing = existingList.find(r => r.id === rule.id);
     if (!existing) {
       await repos.rules.save(rule as any);
       mutationsCreated++;
-    } else {
-      const isIdentical =
-        existing.rule_type === rule.rule_type &&
-        existing.is_blocking === rule.is_blocking &&
-        existing.title === rule.title;
-      if (!isIdentical) {
-        await repos.rules.save(rule as any);
-        mutationsUpdated++;
-      }
+    } else if (
+      existing.rule_type !== rule.rule_type ||
+      existing.is_blocking !== rule.is_blocking ||
+      existing.title !== rule.title
+    ) {
+      await repos.rules.save(rule as any);
+      mutationsUpdated++;
     }
   }
 
-  // 8. Runtime Snapshots (Quarantined as transient runtime truth, not static)
+  // Runtime snapshots below are fixtures only. They are loaded into the memory
+  // demo runtime repository and never imported into canonical static DB seed.
   for (const snap of manifestData.runtime_snapshots) {
     const existing = await repos.runtimeSnapshots.findLatestForRoute(snap.route_id || '');
     if (!existing || existing.id !== snap.id) {
@@ -203,6 +186,7 @@ export async function loadSeedManifest(repos: Repositories): Promise<SeedResult>
   }
 
   return {
+    dataClassification: 'UI_DEMO_ONLY',
     areasCount: manifestData.areas.length,
     familiesCount: manifestData.route_families.length,
     routesCount: manifestData.routes.length,

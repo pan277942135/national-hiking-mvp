@@ -1,15 +1,16 @@
 /**
- * Core Invariant Assertions and Verifications for National Hiking MVP
+ * Core invariant assertions for the National Hiking MVP.
+ *
+ * These checks protect canonical semantics. Adapter/display labels must never
+ * weaken the persisted domain contract.
  */
 
 import {
   RawTrack,
   Route,
-  RouteFamily,
-  FieldValue,
   RuntimeSnapshot,
-  Evidence,
-  PageProjection
+  PageProjection,
+  RawTrackRouteAssignment
 } from './types.js';
 
 export class InvariantViolationError extends Error {
@@ -19,9 +20,7 @@ export class InvariantViolationError extends Error {
   }
 }
 
-/**
- * 1. Track != Route.
- */
+/** 1. Track != Route. */
 export function assertTrackNotRoute(track: RawTrack, route: Route): void {
   if (track.id === route.id) {
     throw new InvariantViolationError(1, 'RawTrack ID must not be conflated with Route ID');
@@ -29,27 +28,19 @@ export function assertTrackNotRoute(track: RawTrack, route: Route): void {
 }
 
 /**
- * 2. A planned navigation line is NOT Recorded GPS evidence.
+ * 2. A planned navigation line is never Recorded GPS execution evidence.
  */
 export function assertPlannedLineNotRecordedGps(track: RawTrack): void {
-  if (track.provenance_type === 'PLANNED_LINE' && track.provenance_type === 'RECORDED_GPS') {
-    throw new InvariantViolationError(2, 'Planned lines cannot be typed as Recorded GPS evidence');
+  const recordedExecution = track.recorded_execution;
+  if (track.provenance_type === 'PLANNED_NAVIGATION_LINE' && recordedExecution === true) {
+    throw new InvariantViolationError(
+      2,
+      'PLANNED_NAVIGATION_LINE cannot contribute Recorded GPS execution evidence'
+    );
   }
 }
 
-/**
- * 4. RouteFamily identity and child Route identity may be canonical without executable geometry.
- */
-export function assertCanonicalIdentityWithoutGeometryAllowed(route: Route): boolean {
-  if (route.identity_state === 'CANONICAL' && route.geometry_state !== 'ACCEPTED_CONSENSUS') {
-    return true; // Valid and supported
-  }
-  return true;
-}
-
-/**
- * 6. Raw tracks from sibling variants must never count toward target-route geometry consensus.
- */
+/** 6. Sibling variants must never share accepted evidence into target consensus. */
 export function assertSiblingTracksSeparated(
   targetRouteId: string,
   siblingRouteId: string,
@@ -58,13 +49,43 @@ export function assertSiblingTracksSeparated(
 ): void {
   const overlap = targetAcceptedTrackIds.filter(id => siblingAcceptedTrackIds.includes(id));
   if (overlap.length > 0) {
-    throw new InvariantViolationError(6, `Sibling tracks [${overlap.join(', ')}] illegally shared between ${targetRouteId} and ${siblingRouteId}`);
+    throw new InvariantViolationError(
+      6,
+      `Sibling tracks [${overlap.join(', ')}] illegally shared between ${targetRouteId} and ${siblingRouteId}`
+    );
   }
 }
 
 /**
- * 9. Runtime state must include observed_at and valid_until.
+ * 7. Public child-route geometry consensus defaults to >=2 independent
+ * TARGET_ACCEPTED recorded executions for the same child route.
  */
+export function countIndependentTargetRecordedExecutions(
+  routeId: string,
+  assignments: RawTrackRouteAssignment[],
+  tracks: RawTrack[]
+): number {
+  const keys = new Set<string>();
+
+  for (const assignment of assignments) {
+    if (assignment.route_id !== routeId) continue;
+
+    const state = assignment.assignment_state;
+    const accepted = state ? state === 'TARGET_ACCEPTED' : assignment.match_status === 'ACCEPTED';
+    if (!accepted) continue;
+
+    const track = tracks.find(t => t.id === assignment.track_id);
+    if (!track) continue;
+    if (!['RECORDED_GPS', 'RECORDED_GPS_MERGED'].includes(track.provenance_type)) continue;
+    if (track.recorded_execution === false) continue;
+
+    keys.add(assignment.independent_provenance_key || track.id);
+  }
+
+  return keys.size;
+}
+
+/** 9. Runtime state must include a valid observed_at / valid_until interval. */
 export function assertRuntimeSnapshotValidity(snapshot: RuntimeSnapshot): void {
   if (!snapshot.observed_at || !snapshot.valid_until) {
     throw new InvariantViolationError(9, 'Runtime snapshot must include both observed_at and valid_until');
@@ -76,18 +97,14 @@ export function assertRuntimeSnapshotValidity(snapshot: RuntimeSnapshot): void {
   }
 }
 
-/**
- * 13. Page projection must never mutate canonical truth.
- */
+/** 13. Page projection is read-only with respect to canonical truth. */
 export function assertPageProjectionImmutable(originalRoute: Route, projection: PageProjection): void {
   if (originalRoute.id !== projection.route_id || originalRoute.identity_state !== projection.identity_state) {
     throw new InvariantViolationError(13, 'Projection must reflect canonical truth without mutation');
   }
 }
 
-/**
- * 14. Runtime-only facts must never be imported as static truth.
- */
+/** 14. Runtime-only facts must not be imported as static canonical truth. */
 export function assertRuntimeFactQuarantined(runtimeFact: unknown, isStaticTable: boolean): void {
   if (isStaticTable && runtimeFact) {
     throw new InvariantViolationError(14, 'Runtime transient facts must not be persisted into static canonical definition tables');
