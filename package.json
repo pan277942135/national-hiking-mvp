@@ -7,9 +7,12 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/domain_invariants.test.ts tests/hard_gate.test.ts",
+    "test:db": "tsx --test tests/postgres_integration.test.ts",
+    "test:all": "npm test && npm run test:db",
     "migrate": "tsx -e \"import('./src/migration_runner.js').then(m => m.runDatabaseMigrations().then(console.log))\"",
     "seed": "tsx -e \"import('./seed/seed_loader.js').then(async s => { const { createMemoryRepositories } = await import('./src/repository/repositories.js'); const { repos } = createMemoryRepositories(); const res = await s.loadSeedManifest(repos); console.log(res); })\"",
+    "seed:db": "tsx -e \"import('./db/canonical_seed_runner.js').then(m => m.seedCanonicalDatabase().then(console.log))\"",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
