@@ -10,7 +10,9 @@ export interface ActivateCanonicalTrackInput {
   routeId: string;
   sourceRawTrackId: string;
   reviewerId: string;
+  /** Public activation is always FIRST_PARTY_PUBLIC. RAW_INDEPENDENT is rejected. */
   consensusMode?: GeometryConsensusMode;
+  /** Explicit editorial rationale; required for any successful activation. */
   reviewNote?: string;
 }
 
@@ -20,12 +22,22 @@ export interface ActivateCanonicalTrackResult {
   sourceRawTrackId: string;
   canonicalTrackVersion: number;
   routeVersion: number;
-  routeState: string;
+  previousRouteState: string;
+  routeState: 'STATIC_PUBLISHABLE' | 'RULE_BLOCKED';
   distanceMeters: number;
   elevationGainMeters: null;
   readiness: GeometryConsensusReadiness;
+  geometryDerivation: 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING';
+  dependencyRowsResolved: number;
   autoPromoted: false;
   legalClearanceInferred: false;
+  runtimeStateInferred: false;
+}
+
+function requireNonEmpty(label: string, value: string | undefined): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) throw new Error(`${label} is required for editorial canonicalization`);
+  return trimmed;
 }
 
 async function insertCanonicalTrack(
@@ -33,20 +45,26 @@ async function insertCanonicalTrack(
   input: ActivateCanonicalTrackInput,
   readiness: GeometryConsensusReadiness
 ): Promise<ActivateCanonicalTrackResult> {
-  if (!input.reviewerId.trim()) throw new Error('reviewerId is required for editorial canonicalization');
   if (readiness.state !== 'READY_FOR_EDITORIAL_CANONICALIZATION') {
     throw new Error(`Geometry consensus is not ready for canonicalization: ${readiness.state}`);
+  }
+  if (readiness.mode !== 'FIRST_PARTY_PUBLIC') {
+    throw new Error('Public CanonicalTrack activation requires FIRST_PARTY_PUBLIC consensus');
   }
   if (!readiness.acceptedRawTrackIds.includes(input.sourceRawTrackId)) {
     throw new Error('sourceRawTrackId must be one of the consensus-accepted child-route RawTracks');
   }
 
+  const reviewerId = requireNonEmpty('reviewerId', input.reviewerId);
+  const reviewNote = requireNonEmpty('reviewNote', input.reviewNote);
+
   const routeResult = await client.query<{
     route_id: string;
     route_state: string;
     version: number;
+    active_canonical_track_id: string | null;
   }>(
-    `SELECT route_id, route_state, version
+    `SELECT route_id, route_state, version, active_canonical_track_id
        FROM route
       WHERE route_id = $1
       FOR UPDATE`,
@@ -54,6 +72,20 @@ async function insertCanonicalTrack(
   );
   const route = routeResult.rows[0];
   if (!route) throw new Error(`Route not found: ${input.routeId}`);
+
+  if (route.active_canonical_track_id) {
+    throw new Error(
+      `Route ${input.routeId} already has active CanonicalTrack ${route.active_canonical_track_id}; use a separate revision workflow`
+    );
+  }
+  if (route.route_state === 'EXECUTABLE') {
+    throw new Error(
+      `Route ${input.routeId} is already EXECUTABLE; initial activation cannot revise executable geometry`
+    );
+  }
+  if (!['GEOMETRY_BLOCKED', 'IDENTITY_ONLY', 'STATIC_PUBLISHABLE', 'RULE_BLOCKED'].includes(route.route_state)) {
+    throw new Error(`Route state ${route.route_state} is not eligible for initial CanonicalTrack activation`);
+  }
 
   const sourceResult = await client.query<{
     raw_track_id: string;
@@ -98,13 +130,15 @@ async function insertCanonicalTrack(
     .digest('hex')
     .slice(0, 20)
     .toUpperCase()}`;
+  const activatedAt = new Date().toISOString();
 
   const qa = {
     canonicalization_policy: 'EDITOR_SELECTED_ACCEPTED_RAW_TRACK_V1',
     geometry_derivation: 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING',
     source_raw_track_id: input.sourceRawTrackId,
-    reviewer_id: input.reviewerId,
-    review_note: input.reviewNote ?? null,
+    reviewer_id: reviewerId,
+    review_note: reviewNote,
+    activated_at: activatedAt,
     consensus_mode: readiness.mode,
     consensus_evaluated_at: readiness.evaluatedAt,
     consensus_reason_codes: readiness.reasonCodes,
@@ -112,13 +146,12 @@ async function insertCanonicalTrack(
     distinct_actor_count: readiness.distinctActorCount,
     accepted_raw_track_ids: readiness.acceptedRawTrackIds,
     pair_compatibility: readiness.pairCompatibility,
+    thresholds: readiness.thresholds,
     legal_clearance_inferred: false,
     runtime_state_inferred: false
   };
 
-  const inserted = await client.query<{
-    distance_m: number;
-  }>(
+  const inserted = await client.query<{ distance_m: number }>(
     `INSERT INTO canonical_track (
        canonical_track_id, route_id, geometry, distance_m,
        elevation_gain_m, qa, version
@@ -135,12 +168,23 @@ async function insertCanonicalTrack(
   );
   const distanceMeters = Number(inserted.rows[0]?.distance_m ?? 0);
 
+  // Keep RouteSegment materialized from exactly the same approved geometry.
+  // This is intentionally a one-segment baseline, not a segmentation algorithm.
+  await client.query(
+    `INSERT INTO route_segment (
+       route_segment_id, route_id, canonical_track_id, segment_index, geometry
+     )
+     SELECT $1, $2, $3, 0, geometry
+       FROM canonical_track
+      WHERE canonical_track_id = $3`,
+    [`SEG-${canonicalTrackId}-000`, input.routeId, canonicalTrackId]
+  );
+
   // Geometry approval resolves GEOMETRY_BLOCKED, but it does not prove current
   // legal clearance or runtime safety. Therefore this transaction never sets
   // EXECUTABLE automatically. Existing RULE_BLOCKED state is preserved.
-  const nextRouteState = route.route_state === 'GEOMETRY_BLOCKED' || route.route_state === 'IDENTITY_ONLY'
-    ? 'STATIC_PUBLISHABLE'
-    : route.route_state;
+  const nextRouteState: ActivateCanonicalTrackResult['routeState'] =
+    route.route_state === 'RULE_BLOCKED' ? 'RULE_BLOCKED' : 'STATIC_PUBLISHABLE';
   const routeVersion = route.version + 1;
 
   await client.query(
@@ -152,18 +196,42 @@ async function insertCanonicalTrack(
     [input.routeId, canonicalTrackId, nextRouteState, routeVersion]
   );
 
+  // A route-coverage dependency is geometry-specific. Resolve it only after the
+  // editor activates a CanonicalTrack; other legal/runtime dependencies remain.
+  const dependencyResolution = await client.query(
+    `UPDATE dependency
+        SET state = 'RESOLVED',
+            stop_status = 'RESOLVED',
+            resolved_at = now(),
+            metadata = metadata || jsonb_build_object(
+              'resolved_by_canonical_track_id', $2,
+              'resolved_by_reviewer_id', $3,
+              'resolved_at', $4
+            )
+      WHERE entity_type = 'route'
+        AND entity_id = $1
+        AND dependency_class = 'ROUTE_COVERAGE'
+        AND field_key = 'canonical_geometry'
+        AND state <> 'RESOLVED'`,
+    [input.routeId, canonicalTrackId, reviewerId, activatedAt]
+  );
+
   return {
     canonicalTrackId,
     routeId: input.routeId,
     sourceRawTrackId: input.sourceRawTrackId,
     canonicalTrackVersion,
     routeVersion,
+    previousRouteState: route.route_state,
     routeState: nextRouteState,
     distanceMeters,
     elevationGainMeters: null,
     readiness,
+    geometryDerivation: 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING',
+    dependencyRowsResolved: dependencyResolution.rowCount ?? 0,
     autoPromoted: false,
-    legalClearanceInferred: false
+    legalClearanceInferred: false,
+    runtimeStateInferred: false
   };
 }
 
@@ -171,10 +239,15 @@ async function insertCanonicalTrack(
  * Explicit editorial action only.
  *
  * The consensus predicate is evaluated inside the same SERIALIZABLE transaction
- * that creates CanonicalTrack and updates Route. This removes the previous
- * time-of-check/time-of-use window between a readiness read and activation.
- * PostgreSQL SSI will abort a conflicting concurrent evidence mutation rather
- * than allow activation from a stale consensus snapshot.
+ * that creates CanonicalTrack and updates Route. This removes a time-of-check /
+ * time-of-use window between readiness and activation. PostgreSQL SSI will
+ * abort a conflicting concurrent evidence mutation rather than allow activation
+ * from a stale consensus snapshot.
+ *
+ * Public activation always uses FIRST_PARTY_PUBLIC consensus: >=2 independent
+ * accepted FULL_ROUTE_QA executions, >=2 distinct first-party actor hashes and
+ * pairwise-compatible geometry. RAW_INDEPENDENT may be useful as a diagnostic
+ * mode elsewhere, but it cannot activate public canonical geometry.
  *
  * The selected geometry is copied exactly from one approved RawTrack. No
  * clustering/averaging constructs a new navigation line.
@@ -183,6 +256,10 @@ export async function activateCanonicalTrackFromAcceptedRaw(
   pool: Pool,
   input: ActivateCanonicalTrackInput
 ): Promise<ActivateCanonicalTrackResult> {
+  if (input.consensusMode && input.consensusMode !== 'FIRST_PARTY_PUBLIC') {
+    throw new Error('Public CanonicalTrack activation requires FIRST_PARTY_PUBLIC consensus');
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
@@ -196,7 +273,7 @@ export async function activateCanonicalTrackFromAcceptedRaw(
     if (!lockedRoute.rows[0]) throw new Error(`Route not found: ${input.routeId}`);
 
     const readiness = await evaluateGeometryConsensusReadiness(client, input.routeId, {
-      mode: input.consensusMode ?? 'FIRST_PARTY_PUBLIC'
+      mode: 'FIRST_PARTY_PUBLIC'
     });
     const result = await insertCanonicalTrack(client, input, readiness);
     await client.query('COMMIT');
