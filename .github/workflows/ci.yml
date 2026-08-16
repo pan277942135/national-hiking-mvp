@@ -10,7 +10,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/national_hiking_test
+      NODE_ENV: test
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: national_hiking_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d national_hiking_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +46,9 @@ jobs:
 
       - name: Unit and regression tests
         run: npm test
+
+      - name: Canonical PostGIS integration replay
+        run: npm run test:db
 
       - name: Production build
         run: npm run build
