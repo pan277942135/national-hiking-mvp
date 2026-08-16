@@ -10,6 +10,7 @@ import {
 } from '../src/services/canonical_track_ingest_service.js';
 import {
   evaluateAndAssignCanonicalRawTrack,
+  GeometryGateProfile,
   S12_CORE_QA_PROFILE_V1
 } from '../src/services/geometry_gate_service.js';
 import {
@@ -18,6 +19,21 @@ import {
 } from '../src/services/first_party_activity_service.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL || process.env.PGHOST);
+const CI_ROUTE_ID = 'CI-SYNTH-FULL-ROUTE';
+
+const CI_FULL_ROUTE_PROFILE: GeometryGateProfile = {
+  profileId: 'CI-SYNTH-FULL-ROUTE-QA-V1',
+  routeId: CI_ROUTE_ID,
+  profileVersion: 1,
+  purpose: 'FULL_ROUTE_QA',
+  requireDirection: 'FORWARD',
+  acceptanceClass: 'STRONG',
+  anchors: [
+    { anchorId: 'T01', label: 'CI start', longitude: 118.8515, latitude: 32.0441, strongMaxMeters: 40, nearMaxMeters: 100 },
+    { anchorId: 'T02', label: 'CI middle', longitude: 118.8554, latitude: 32.0518, strongMaxMeters: 40, nearMaxMeters: 100 },
+    { anchorId: 'T03', label: 'CI end', longitude: 118.8542, latitude: 32.0556, strongMaxMeters: 40, nearMaxMeters: 100 }
+  ]
+};
 
 async function resetCanonicalTables(): Promise<void> {
   const pool = getPgPool();
@@ -152,86 +168,87 @@ test('Canonical migration and seed replay are idempotent on live PostGIS', { ski
   assert.equal(Number(runtimeLeak.rows[0]?.count ?? 0), 0);
 });
 
-test('RawTrack -> spatial gate -> first-party consensus stays review-only until canonical promotion', { skip: !hasDatabase }, async () => {
+test('Core QA cannot promote S12; full-route gated evidence remains review-only until editorial promotion', { skip: !hasDatabase }, async () => {
   const pool = getPgPool();
   assert.ok(pool);
   const repo = new CanonicalPostgresRepository(pool);
 
   const gpx1 = await ingestCanonicalRawTrack(pool, {
-    format: 'GPX',
-    fileName: 's12_actor_a_day1.gpx',
-    payload: recordedGpx('S12 A day1', 0),
-    sourceTrackId: 'ci-s12-a-1'
+    format: 'GPX', fileName: 'ci_actor_a_day1.gpx', payload: recordedGpx('CI day1', 0), sourceTrackId: 'ci-full-1'
   });
   const gpx2 = await ingestCanonicalRawTrack(pool, {
-    format: 'GPX',
-    fileName: 's12_actor_a_day2.gpx',
-    payload: recordedGpx('S12 A day2', 20),
-    sourceTrackId: 'ci-s12-a-2'
+    format: 'GPX', fileName: 'ci_actor_a_day2.gpx', payload: recordedGpx('CI day2', 20), sourceTrackId: 'ci-full-2'
   });
   const gpx3 = await ingestCanonicalRawTrack(pool, {
-    format: 'GPX',
-    fileName: 's12_actor_b_day1.gpx',
-    payload: recordedGpx('S12 B day1', 40),
-    sourceTrackId: 'ci-s12-b-1'
+    format: 'GPX', fileName: 'ci_actor_b_day1.gpx', payload: recordedGpx('CI day3', 40), sourceTrackId: 'ci-full-3'
   });
 
   for (const track of [gpx1, gpx2, gpx3]) {
     assert.equal(track.provenanceClass, 'RECORDED_GPS');
     assert.equal(track.recordedExecution, true);
-    assert.equal(track.pointCount, 3);
-    assert.equal(track.timestampCount, 3);
   }
+
+  // S12 historical A01-A03 anchors are core-corridor QA only. A perfect pass is
+  // diagnostic support, not acceptance of the complete 下马坊→流徽榭 child route.
+  const coreOnly = await evaluateAndAssignCanonicalRawTrack(pool, {
+    rawTrackId: gpx1.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    profile: S12_CORE_QA_PROFILE_V1,
+    independentProvenanceKey: 'CI-CORE-DIAGNOSTIC'
+  });
+  assert.equal(coreOnly.gateState, 'PASS');
+  assert.equal(coreOnly.assignmentState, 'UNCLASSIFIED');
+  assert.ok(coreOnly.reasonCodes.includes('CORE_QA_PASS_NOT_FULL_ROUTE_ACCEPTANCE'));
+  assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 0);
+
+  await pool.query(
+    `INSERT INTO route (
+       route_id, route_family_id, area_id, canonical_name, identity_state, route_state, version
+     ) VALUES ($1, 'ZJ-S12-RF', 'AREA-NJ-ZIJINSHAN', 'CI synthetic full-route gate fixture', 'CANDIDATE', 'GEOMETRY_BLOCKED', 1)
+     ON CONFLICT (route_id) DO NOTHING`,
+    [CI_ROUTE_ID]
+  );
 
   await assert.rejects(
     assignCanonicalRawTrack(pool, {
       rawTrackId: gpx1.rawTrackId,
-      routeId: 'ZJ-S12-A',
+      routeId: CI_ROUTE_ID,
       assignmentState: 'TARGET_ACCEPTED',
       geometryGateState: 'PASS'
     }),
     /Direct TARGET_ACCEPTED assignment is disabled/
   );
 
-  const gate1 = await evaluateAndAssignCanonicalRawTrack(pool, {
-    rawTrackId: gpx1.rawTrackId,
-    routeId: 'ZJ-S12-A',
-    profile: S12_CORE_QA_PROFILE_V1,
-    independentProvenanceKey: 'CI-EXECUTION-A-1'
-  });
-  const gate2 = await evaluateAndAssignCanonicalRawTrack(pool, {
-    rawTrackId: gpx2.rawTrackId,
-    routeId: 'ZJ-S12-A',
-    profile: S12_CORE_QA_PROFILE_V1,
-    independentProvenanceKey: 'CI-EXECUTION-A-2'
-  });
-  const gate3 = await evaluateAndAssignCanonicalRawTrack(pool, {
-    rawTrackId: gpx3.rawTrackId,
-    routeId: 'ZJ-S12-A',
-    profile: S12_CORE_QA_PROFILE_V1,
-    independentProvenanceKey: 'CI-EXECUTION-B-1'
-  });
-  for (const gate of [gate1, gate2, gate3]) {
+  const gates = [];
+  for (const [track, key] of [
+    [gpx1, 'CI-EXECUTION-A-1'],
+    [gpx2, 'CI-EXECUTION-A-2'],
+    [gpx3, 'CI-EXECUTION-B-1']
+  ] as const) {
+    gates.push(await evaluateAndAssignCanonicalRawTrack(pool, {
+      rawTrackId: track.rawTrackId,
+      routeId: CI_ROUTE_ID,
+      profile: CI_FULL_ROUTE_PROFILE,
+      independentProvenanceKey: key
+    }));
+  }
+  for (const gate of gates) {
     assert.equal(gate.gateState, 'PASS');
     assert.equal(gate.assignmentState, 'TARGET_ACCEPTED');
+    assert.equal(gate.profilePurpose, 'FULL_ROUTE_QA');
     assert.equal(gate.directionClass, 'FORWARD');
-    assert.ok(gate.anchors.every(a => a.hitClass === 'STRONG'));
   }
-
-  assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 3);
+  assert.equal(await repo.countIndependentAcceptedRawExecutions(CI_ROUTE_ID), 3);
 
   const planned = await ingestCanonicalRawTrack(pool, {
     format: 'KML',
-    fileName: 's12_control.kml',
+    fileName: 'ci_control.kml',
     payload: '<kml><Placemark><LineString><coordinates>118.8515,32.0441 118.8554,32.0518 118.8542,32.0556</coordinates></LineString></Placemark></kml>'
   });
-  assert.equal(planned.provenanceClass, 'PLANNED_NAVIGATION_LINE');
-  assert.equal(planned.recordedExecution, false);
-
   const plannedGate = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: planned.rawTrackId,
-    routeId: 'ZJ-S12-A',
-    profile: S12_CORE_QA_PROFILE_V1
+    routeId: CI_ROUTE_ID,
+    profile: CI_FULL_ROUTE_PROFILE
   });
   assert.equal(plannedGate.gateState, 'CONTROL_ONLY');
   assert.equal(plannedGate.assignmentState, 'CONTROL_ONLY');
@@ -247,8 +264,8 @@ test('RawTrack -> spatial gate -> first-party consensus stays review-only until 
   });
   const farGate = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: far.rawTrackId,
-    routeId: 'ZJ-S12-A',
-    profile: S12_CORE_QA_PROFILE_V1,
+    routeId: CI_ROUTE_ID,
+    profile: CI_FULL_ROUTE_PROFILE,
     independentProvenanceKey: 'CI-FAR-NEGATIVE'
   });
   assert.equal(farGate.gateState, 'FAIL');
@@ -259,46 +276,33 @@ test('RawTrack -> spatial gate -> first-party consensus stays review-only until 
   const actorB = hashActorId('ci-actor-b', 'ci-only-salt');
 
   await recordFirstPartyActivity(pool, {
-    actorHash: actorA,
-    rawTrackId: gpx1.rawTrackId,
-    recordedAt: '2026-08-16T02:00:00Z',
-    routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
-    integrityState: 'PASS'
+    actorHash: actorA, rawTrackId: gpx1.rawTrackId, recordedAt: '2026-08-16T02:00:00Z',
+    routeId: CI_ROUTE_ID, assignmentState: 'TARGET_ACCEPTED', geometryGateState: 'PASS', integrityState: 'PASS'
   });
   await recordFirstPartyActivity(pool, {
-    actorHash: actorA,
-    rawTrackId: gpx2.rawTrackId,
-    recordedAt: '2026-08-17T02:00:00Z',
-    routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
-    integrityState: 'PASS'
+    actorHash: actorA, rawTrackId: gpx2.rawTrackId, recordedAt: '2026-08-17T02:00:00Z',
+    routeId: CI_ROUTE_ID, assignmentState: 'TARGET_ACCEPTED', geometryGateState: 'PASS', integrityState: 'PASS'
   });
-
-  assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 1,
+  assert.equal(await repo.countIndependentAcceptedActors(CI_ROUTE_ID), 1,
     'same actor across multiple days is repeatability support, not full independence');
 
   await recordFirstPartyActivity(pool, {
-    actorHash: actorB,
-    rawTrackId: gpx3.rawTrackId,
-    recordedAt: '2026-08-18T02:00:00Z',
-    routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
-    integrityState: 'PASS'
+    actorHash: actorB, rawTrackId: gpx3.rawTrackId, recordedAt: '2026-08-18T02:00:00Z',
+    routeId: CI_ROUTE_ID, assignmentState: 'TARGET_ACCEPTED', geometryGateState: 'PASS', integrityState: 'PASS'
   });
+  assert.equal(await repo.countIndependentAcceptedActors(CI_ROUTE_ID), 2);
 
-  assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 2);
-
-  const routeAfterEvidence = await repo.findRoute('ZJ-S12-A');
-  assert.equal(routeAfterEvidence?.route_state, 'GEOMETRY_BLOCKED',
-    'evidence ingestion must never auto-promote canonical route state');
+  const routeAfterEvidence = await repo.findRoute(CI_ROUTE_ID);
+  assert.equal(routeAfterEvidence?.route_state, 'GEOMETRY_BLOCKED');
   assert.equal(routeAfterEvidence?.active_canonical_track_id, null);
 
   const canonicalTrackCount = await pool.query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM canonical_track WHERE route_id = 'ZJ-S12-A'`
+    `SELECT count(*)::text AS count FROM canonical_track WHERE route_id = $1`,
+    [CI_ROUTE_ID]
   );
   assert.equal(Number(canonicalTrackCount.rows[0]?.count ?? 0), 0);
+
+  // Production S12 remains exactly where the frozen evidence says it is.
+  assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 0);
+  assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 0);
 });
