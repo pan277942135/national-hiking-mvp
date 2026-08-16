@@ -106,23 +106,66 @@ test('Reviewed activation copies one approved RawTrack exactly and never infers 
   const readiness = await evaluateGeometryConsensusReadiness(pool, ROUTE_ID);
   assert.equal(readiness.state, 'READY_FOR_EDITORIAL_CANONICALIZATION');
 
+  await assert.rejects(
+    activateCanonicalTrackFromAcceptedRaw(pool, {
+      routeId: ROUTE_ID,
+      sourceRawTrackId: t1.rawTrackId,
+      reviewerId: 'ci-editor-001',
+      reviewNote: 'Should be rejected because public activation cannot use raw-only consensus.',
+      consensusMode: 'RAW_INDEPENDENT'
+    }),
+    /FIRST_PARTY_PUBLIC/
+  );
+
+  await assert.rejects(
+    activateCanonicalTrackFromAcceptedRaw(pool, {
+      routeId: ROUTE_ID,
+      sourceRawTrackId: t1.rawTrackId,
+      reviewerId: 'ci-editor-001'
+    }),
+    /reviewNote is required/
+  );
+
+  await pool.query(
+    `INSERT INTO dependency (
+       dependency_id, entity_type, entity_id, field_key, dependency_class,
+       source_class, state, stop_status, reopen_trigger, metadata
+     ) VALUES (
+       'CI-DEP-CANONICAL-ACTIVATION', 'route', $1, 'canonical_geometry', 'ROUTE_COVERAGE',
+       'FIRST_PARTY_ACTIVITY', 'EXTERNAL_DEPENDENCY', 'SOURCE_SWITCH',
+       'Two independent accepted full-route executions from distinct actors',
+       '{"ci_fixture":true}'::jsonb
+     )`,
+    [ROUTE_ID]
+  );
+
   const activated = await activateCanonicalTrackFromAcceptedRaw(pool, {
     routeId: ROUTE_ID,
     sourceRawTrackId: t1.rawTrackId,
     reviewerId: 'ci-editor-001',
     reviewNote: 'Explicit CI editorial approval of synthetic fixture only.'
   });
+  assert.equal(activated.previousRouteState, 'GEOMETRY_BLOCKED');
   assert.equal(activated.routeState, 'STATIC_PUBLISHABLE');
   assert.equal(activated.autoPromoted, false);
   assert.equal(activated.legalClearanceInferred, false);
+  assert.equal(activated.runtimeStateInferred, false);
+  assert.equal(activated.geometryDerivation, 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING');
+  assert.equal(activated.dependencyRowsResolved, 1);
   assert.ok(activated.distanceMeters > 0);
   assert.equal(activated.elevationGainMeters, null);
 
-  const equality = await pool.query<{ same_geometry: boolean; derivation: string; reviewer: string }>(
+  const equality = await pool.query<{
+    same_geometry: boolean;
+    derivation: string;
+    reviewer: string;
+    review_note: string;
+  }>(
     `SELECT
        ST_Equals(ct.geometry, rt.geometry) AS same_geometry,
        ct.qa->>'geometry_derivation' AS derivation,
-       ct.qa->>'reviewer_id' AS reviewer
+       ct.qa->>'reviewer_id' AS reviewer,
+       ct.qa->>'review_note' AS review_note
      FROM canonical_track ct
      JOIN raw_track rt ON rt.raw_track_id = $2
      WHERE ct.canonical_track_id = $1`,
@@ -131,6 +174,32 @@ test('Reviewed activation copies one approved RawTrack exactly and never infers 
   assert.equal(equality.rows[0]?.same_geometry, true);
   assert.equal(equality.rows[0]?.derivation, 'COPY_APPROVED_RAW_TRACK_NO_AVERAGING');
   assert.equal(equality.rows[0]?.reviewer, 'ci-editor-001');
+  assert.match(equality.rows[0]?.review_note ?? '', /Explicit CI editorial approval/);
+
+  const segment = await pool.query<{ same_geometry: boolean; segment_index: number }>(
+    `SELECT ST_Equals(rs.geometry, ct.geometry) AS same_geometry, rs.segment_index
+       FROM route_segment rs
+       JOIN canonical_track ct ON ct.canonical_track_id = rs.canonical_track_id
+      WHERE rs.route_id = $1 AND rs.canonical_track_id = $2`,
+    [ROUTE_ID, activated.canonicalTrackId]
+  );
+  assert.equal(segment.rows.length, 1);
+  assert.equal(segment.rows[0]?.same_geometry, true);
+  assert.equal(segment.rows[0]?.segment_index, 0);
+
+  const dependency = await pool.query<{
+    state: string;
+    stop_status: string;
+    resolved_by_track: string;
+  }>(
+    `SELECT state, stop_status,
+            metadata->>'resolved_by_canonical_track_id' AS resolved_by_track
+       FROM dependency
+      WHERE dependency_id = 'CI-DEP-CANONICAL-ACTIVATION'`
+  );
+  assert.equal(dependency.rows[0]?.state, 'RESOLVED');
+  assert.equal(dependency.rows[0]?.stop_status, 'RESOLVED');
+  assert.equal(dependency.rows[0]?.resolved_by_track, activated.canonicalTrackId);
 
   const route = await pool.query<{ route_state: string; active_canonical_track_id: string; version: number }>(
     'SELECT route_state, active_canonical_track_id, version FROM route WHERE route_id = $1',
@@ -146,6 +215,16 @@ test('Reviewed activation copies one approved RawTrack exactly and never infers 
   assert.equal(projection.geometry.map_download_visible, false);
   assert.equal(projection.geometry.distance_meters, activated.distanceMeters);
   assert.equal(projection.geometry.elevation_gain_meters, null);
+
+  await assert.rejects(
+    activateCanonicalTrackFromAcceptedRaw(pool, {
+      routeId: ROUTE_ID,
+      sourceRawTrackId: t2.rawTrackId,
+      reviewerId: 'ci-editor-002',
+      reviewNote: 'A second activation must use a separate revision workflow.'
+    }),
+    /already has active CanonicalTrack/
+  );
 });
 
 test('Production S12-A cannot be canonicalized without real full-route consensus', { skip: !hasDatabase }, async () => {
@@ -162,7 +241,8 @@ test('Production S12-A cannot be canonicalized without real full-route consensus
     activateCanonicalTrackFromAcceptedRaw(pool, {
       routeId: 'ZJ-S12-A',
       sourceRawTrackId: 'NONEXISTENT-RAW',
-      reviewerId: 'ci-editor-001'
+      reviewerId: 'ci-editor-001',
+      reviewNote: 'Should fail before any canonical geometry can be created.'
     }),
     /Geometry consensus is not ready for canonicalization/
   );
