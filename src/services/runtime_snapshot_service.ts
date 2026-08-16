@@ -1,6 +1,6 @@
 /**
- * Runtime Snapshot Service for National Hiking Backend MVP
- * Invariants 9 & 10: Enforces observed_at, valid_until, and prevents stale 'go now' bypass.
+ * Runtime Snapshot Service for the memory/demo adapter.
+ * Runtime observations are transient and never mutate static canonical truth.
  */
 
 import { Repositories } from '../repository/repositories.js';
@@ -26,6 +26,18 @@ export async function createRuntimeSnapshot(
   repos: Repositories,
   input: CreateRuntimeSnapshotInput
 ): Promise<RuntimeSnapshot> {
+  const area = await repos.areas.findById(input.areaId);
+  if (!area) throw new Error(`Area not found for runtime snapshot: ${input.areaId}`);
+
+  if (input.routeId) {
+    const route = await repos.routes.findById(input.routeId);
+    if (!route) throw new Error(`Route not found for runtime snapshot: ${input.routeId}`);
+    const family = await repos.routeFamilies.findById(route.family_id);
+    if (!family || family.area_id !== input.areaId) {
+      throw new Error(`Route ${input.routeId} is not a child of Area ${input.areaId}`);
+    }
+  }
+
   const snapshot: RuntimeSnapshot = {
     id: `snap_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     area_id: input.areaId,
@@ -43,9 +55,7 @@ export async function createRuntimeSnapshot(
     created_at: new Date().toISOString()
   };
 
-  // Enforce Invariant 9: runtime state must include observed_at and valid_until (valid_until >= observed_at)
   assertRuntimeSnapshotValidity(snapshot);
-
   await repos.runtimeSnapshots.save(snapshot);
   return snapshot;
 }
