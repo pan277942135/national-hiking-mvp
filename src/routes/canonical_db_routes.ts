@@ -7,16 +7,13 @@ import {
   type CanonicalAssignmentState,
   type CanonicalTrackFormat
 } from '../services/canonical_track_ingest_service.js';
+import { evaluateAndAssignCanonicalRawTrack } from '../services/geometry_gate_service.js';
 import {
-  evaluateAndAssignCanonicalRawTrack,
-  S12_CORE_QA_PROFILE_V1,
-  type GeometryGateProfile
-} from '../services/geometry_gate_service.js';
+  getRegisteredGeometryGateProfile,
+  listRegisteredGeometryGateProfiles
+} from '../services/geometry_gate_profile_registry.js';
 import { recordFirstPartyActivity } from '../services/first_party_activity_service.js';
-
-const GEOMETRY_GATE_PROFILES: Readonly<Record<string, GeometryGateProfile>> = {
-  [S12_CORE_QA_PROFILE_V1.profileId]: S12_CORE_QA_PROFILE_V1
-};
+import { buildCanonicalRoutePageProjection } from '../services/canonical_page_projection_service.js';
 
 function unavailable(res: Response) {
   return res.status(503).json({
@@ -54,11 +51,12 @@ export function registerCanonicalDbRoutes(app: Express): void {
         route_families: families,
         routes,
         route_evidence: routeEvidence,
-        geometry_gate_profiles: Object.values(GEOMETRY_GATE_PROFILES).map(profile => ({
+        geometry_gate_profiles: listRegisteredGeometryGateProfiles().map(profile => ({
           profile_id: profile.profileId,
           route_id: profile.routeId,
           purpose: profile.purpose,
-          profile_version: profile.profileVersion
+          profile_version: profile.profileVersion,
+          target_acceptance_capable: profile.targetAcceptanceCapable
         })),
         timestamp: new Date().toISOString()
       });
@@ -93,12 +91,13 @@ export function registerCanonicalDbRoutes(app: Express): void {
       const repo = new CanonicalPostgresRepository(pool);
       const route = await repo.findRoute(req.params.routeId);
       if (!route) return res.status(404).json({ error: `Route not found: ${req.params.routeId}` });
-      const [assignments, activities, dependencies, rawCount, actorCount] = await Promise.all([
+      const [assignments, activities, dependencies, rawCount, actorCount, pageProjection] = await Promise.all([
         repo.listRawAssignments(route.route_id),
         repo.listActivityAssignments(route.route_id),
         repo.listDependenciesForEntity('route', route.route_id),
         repo.countIndependentAcceptedRawExecutions(route.route_id),
-        repo.countIndependentAcceptedActors(route.route_id)
+        repo.countIndependentAcceptedActors(route.route_id),
+        buildCanonicalRoutePageProjection(pool, route.route_id)
       ]);
       res.json({
         repository_mode: 'CANONICAL_POSTGRES',
@@ -107,6 +106,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
         raw_track_assignments: assignments,
         activity_assignments: activities,
         dependencies,
+        page_projection: pageProjection,
         geometry_consensus_readiness: {
           independent_recorded_raw_executions: rawCount,
           independent_first_party_actors: actorCount,
@@ -118,6 +118,26 @@ export function registerCanonicalDbRoutes(app: Express): void {
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
+  });
+
+  app.get('/api/canonical/routes/:routeId/page-projection', async (req, res) => {
+    const pool = getPgPool();
+    if (!pool) return unavailable(res);
+    try {
+      const projection = await buildCanonicalRoutePageProjection(pool, req.params.routeId);
+      res.json(projection);
+    } catch (error) {
+      const message = (error as Error).message;
+      res.status(message.startsWith('Route not found:') ? 404 : 500).json({ error: message });
+    }
+  });
+
+  app.get('/api/canonical/geometry-gate-profiles', (_req, res) => {
+    res.json({
+      policy: 'SERVER_OWNED_PROFILES_ONLY',
+      arbitrary_client_profiles_allowed: false,
+      profiles: listRegisteredGeometryGateProfiles()
+    });
   });
 
   app.post('/api/canonical/tracks', async (req: Request, res: Response) => {
@@ -167,7 +187,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
       if (assignmentState === 'TARGET_ACCEPTED') {
         return res.status(400).json({
           error: 'DIRECT_TARGET_ACCEPTED_DISABLED',
-          message: 'Use /geometry-gate with a server-known profile; callers cannot force TARGET_ACCEPTED.'
+          message: 'Use /geometry-gate with a server-known FULL_ROUTE_QA profile; callers cannot force TARGET_ACCEPTED.'
         });
       }
       if (!allowed.includes(assignmentState)) {
@@ -200,7 +220,7 @@ export function registerCanonicalDbRoutes(app: Express): void {
   });
 
   /**
-   * Spatial assignment endpoint. Clients may select only a server-known,
+   * Spatial assignment endpoint. Clients may select only a server-owned,
    * versioned profile. Arbitrary anchors are intentionally not accepted.
    */
   app.post('/api/canonical/routes/:routeId/geometry-gate', async (req, res) => {
@@ -211,11 +231,11 @@ export function registerCanonicalDbRoutes(app: Express): void {
       if (typeof body.rawTrackId !== 'string' || typeof body.profileId !== 'string') {
         return res.status(400).json({ error: 'rawTrackId and profileId are required.' });
       }
-      const profile = GEOMETRY_GATE_PROFILES[body.profileId];
+      const profile = getRegisteredGeometryGateProfile(body.profileId);
       if (!profile) {
         return res.status(400).json({
           error: 'UNKNOWN_GEOMETRY_GATE_PROFILE',
-          allowed_profile_ids: Object.keys(GEOMETRY_GATE_PROFILES)
+          allowed_profile_ids: listRegisteredGeometryGateProfiles().map(p => p.profileId)
         });
       }
       if (profile.routeId !== req.params.routeId) {
