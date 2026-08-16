@@ -1,9 +1,10 @@
 /**
  * National Hiking Backend MVP Server.
  *
- * Current API repository mode is intentionally MEMORY_UI_DEMO. DATABASE_URL is
- * used only for connectivity/migration readiness until the canonical Postgres
- * repository adapter is implemented and verified.
+ * The presentation UI continues to use MEMORY_UI_DEMO. A separate
+ * /api/canonical/* namespace is backed by the canonical PostgreSQL/PostGIS
+ * repository when DATABASE_URL/PGHOST is configured. This separation prevents
+ * demo fixtures from being mistaken for canonical truth.
  */
 
 import express from 'express';
@@ -17,6 +18,7 @@ import { processTrackUpload } from './src/services/track_service.js';
 import { evaluateRouteEligibility } from './src/services/eligibility_service.js';
 import { createRuntimeSnapshot } from './src/services/runtime_snapshot_service.js';
 import { projectRoutePage } from './src/services/page_projection_service.js';
+import { registerCanonicalDbRoutes } from './src/routes/canonical_db_routes.js';
 
 async function startServer() {
   const app = express();
@@ -27,6 +29,10 @@ async function startServer() {
     limit: '20mb',
     type: ['application/xml', 'text/xml', 'application/gpx+xml', 'application/vnd.google-earth.kml+xml']
   }));
+
+  // Canonical DB routes are isolated from the demo UI namespace. When no DB is
+  // configured they return 503 rather than silently falling back to demo data.
+  registerCanonicalDbRoutes(app);
 
   const { repos } = createMemoryRepositories();
   const seedResult = await loadSeedManifest(repos);
@@ -43,11 +49,20 @@ async function startServer() {
     res.json({
       status: 'ok',
       service: 'National Hiking Backend MVP',
-      repository: {
+      presentation_repository: {
         mode: 'MEMORY_UI_DEMO',
         data_classification: seedResult.dataClassification,
         canonical_database_backed: false,
-        note: 'API reads/writes currently use the structured memory demo adapter, not PostgreSQL.'
+        note: 'Default presentation endpoints remain isolated synthetic/demo data.'
+      },
+      canonical_repository: {
+        namespace: '/api/canonical/*',
+        mode: dbStatus.connected ? 'CANONICAL_POSTGRES' : 'UNAVAILABLE',
+        configured_and_reachable: dbStatus.connected,
+        postgis_detected: dbStatus.isPostgis ?? false,
+        note: dbStatus.connected
+          ? 'Canonical namespace reads/writes PostgreSQL/PostGIS only; it never falls back to demo fixtures.'
+          : 'Configure PostgreSQL/PostGIS to enable canonical endpoints.'
       },
       external_postgresql: {
         configured_and_reachable: dbStatus.connected,
@@ -58,12 +73,11 @@ async function startServer() {
         source: 'db/migrations',
         total: migrationValidation.migrationsFound.length,
         valid: migrationValidation.valid,
-        invariantsVerified: migrationValidation.invariantsVerified,
-        live_db_executed: false
+        invariantsVerified: migrationValidation.invariantsVerified
       },
       entities_loaded: {
-        areas_count: areas.length,
-        routes_count: routes.length
+        demo_areas_count: areas.length,
+        demo_routes_count: routes.length
       },
       timestamp: new Date().toISOString()
     });
@@ -94,6 +108,7 @@ async function startServer() {
       const scopes = await repos.legalScopes.listAll();
       const rules = await repos.rules.listAll();
       const migrationValidation = loadAndValidateMigrations();
+      const dbStatus = await checkDatabaseConnection();
 
       const routesWithGate = await Promise.all(routes.map(async route => {
         const gate = await evaluateRouteEligibility(repos, { routeId: route.id });
@@ -115,6 +130,11 @@ async function startServer() {
         data_classification: seedResult.dataClassification,
         warning: 'Synthetic demo records are not production Evidence/RawTrack/Rule truth.',
         canonical_seed: 'db/four_area_seed_manifest_v0_2.json',
+        canonical_api: {
+          namespace: '/api/canonical/*',
+          available: dbStatus.connected,
+          mode: dbStatus.connected ? 'CANONICAL_POSTGRES' : 'UNAVAILABLE'
+        },
         areas,
         families,
         routes: routesWithGate,
