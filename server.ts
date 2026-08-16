@@ -8,7 +8,7 @@
 
 import express from 'express';
 import path from 'node:path';
-import { createViteServer } from 'vite';
+import { createServer as createViteServer } from 'vite';
 import { createMemoryRepositories } from './src/repository/repositories.js';
 import { loadSeedManifest } from './seed/seed_loader.js';
 import { checkDatabaseConnection } from './src/config/database.js';
@@ -210,7 +210,6 @@ async function startServer() {
     }
   });
 
-  // Canonical ingestion contract: GPX / KML only.
   app.post('/tracks', async (req, res) => {
     try {
       let payload = '';
