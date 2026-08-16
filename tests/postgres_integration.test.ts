@@ -9,6 +9,10 @@ import {
   ingestCanonicalRawTrack
 } from '../src/services/canonical_track_ingest_service.js';
 import {
+  evaluateAndAssignCanonicalRawTrack,
+  S12_CORE_QA_PROFILE_V1
+} from '../src/services/geometry_gate_service.js';
+import {
   hashActorId,
   recordFirstPartyActivity
 } from '../src/services/first_party_activity_service.js';
@@ -148,7 +152,7 @@ test('Canonical migration and seed replay are idempotent on live PostGIS', { ski
   assert.equal(Number(runtimeLeak.rows[0]?.count ?? 0), 0);
 });
 
-test('RawTrack -> child assignment -> first-party consensus stays review-only until canonical promotion', { skip: !hasDatabase }, async () => {
+test('RawTrack -> spatial gate -> first-party consensus stays review-only until canonical promotion', { skip: !hasDatabase }, async () => {
   const pool = getPgPool();
   assert.ok(pool);
   const repo = new CanonicalPostgresRepository(pool);
@@ -179,27 +183,40 @@ test('RawTrack -> child assignment -> first-party consensus stays review-only un
     assert.equal(track.timestampCount, 3);
   }
 
-  await assignCanonicalRawTrack(pool, {
+  await assert.rejects(
+    assignCanonicalRawTrack(pool, {
+      rawTrackId: gpx1.rawTrackId,
+      routeId: 'ZJ-S12-A',
+      assignmentState: 'TARGET_ACCEPTED',
+      geometryGateState: 'PASS'
+    }),
+    /Direct TARGET_ACCEPTED assignment is disabled/
+  );
+
+  const gate1 = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: gpx1.rawTrackId,
     routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
+    profile: S12_CORE_QA_PROFILE_V1,
     independentProvenanceKey: 'CI-EXECUTION-A-1'
   });
-  await assignCanonicalRawTrack(pool, {
+  const gate2 = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: gpx2.rawTrackId,
     routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
+    profile: S12_CORE_QA_PROFILE_V1,
     independentProvenanceKey: 'CI-EXECUTION-A-2'
   });
-  await assignCanonicalRawTrack(pool, {
+  const gate3 = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: gpx3.rawTrackId,
     routeId: 'ZJ-S12-A',
-    assignmentState: 'TARGET_ACCEPTED',
-    geometryGateState: 'PASS',
+    profile: S12_CORE_QA_PROFILE_V1,
     independentProvenanceKey: 'CI-EXECUTION-B-1'
   });
+  for (const gate of [gate1, gate2, gate3]) {
+    assert.equal(gate.gateState, 'PASS');
+    assert.equal(gate.assignmentState, 'TARGET_ACCEPTED');
+    assert.equal(gate.directionClass, 'FORWARD');
+    assert.ok(gate.anchors.every(a => a.hitClass === 'STRONG'));
+  }
 
   assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 3);
 
@@ -211,21 +228,32 @@ test('RawTrack -> child assignment -> first-party consensus stays review-only un
   assert.equal(planned.provenanceClass, 'PLANNED_NAVIGATION_LINE');
   assert.equal(planned.recordedExecution, false);
 
-  await assert.rejects(
-    assignCanonicalRawTrack(pool, {
-      rawTrackId: planned.rawTrackId,
-      routeId: 'ZJ-S12-A',
-      assignmentState: 'TARGET_ACCEPTED',
-      geometryGateState: 'PASS'
-    }),
-    /TARGET_ACCEPTED requires recorded execution provenance/
-  );
-  await assignCanonicalRawTrack(pool, {
+  const plannedGate = await evaluateAndAssignCanonicalRawTrack(pool, {
     rawTrackId: planned.rawTrackId,
     routeId: 'ZJ-S12-A',
-    assignmentState: 'CONTROL_ONLY',
-    geometryGateState: 'CONTROL_ONLY'
+    profile: S12_CORE_QA_PROFILE_V1
   });
+  assert.equal(plannedGate.gateState, 'CONTROL_ONLY');
+  assert.equal(plannedGate.assignmentState, 'CONTROL_ONLY');
+
+  const far = await ingestCanonicalRawTrack(pool, {
+    format: 'GPX',
+    fileName: 'far_recorded.gpx',
+    payload: '<gpx><trk><trkseg>' +
+      '<trkpt lat="31.90" lon="118.60"><time>2026-08-16T03:00:00Z</time></trkpt>' +
+      '<trkpt lat="31.91" lon="118.61"><time>2026-08-16T03:05:00Z</time></trkpt>' +
+      '<trkpt lat="31.92" lon="118.62"><time>2026-08-16T03:10:00Z</time></trkpt>' +
+      '</trkseg></trk></gpx>'
+  });
+  const farGate = await evaluateAndAssignCanonicalRawTrack(pool, {
+    rawTrackId: far.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    profile: S12_CORE_QA_PROFILE_V1,
+    independentProvenanceKey: 'CI-FAR-NEGATIVE'
+  });
+  assert.equal(farGate.gateState, 'FAIL');
+  assert.equal(farGate.assignmentState, 'TARGET_REJECTED');
+  assert.ok(farGate.anchors.some(a => a.hitClass === 'MISS'));
 
   const actorA = hashActorId('ci-actor-a', 'ci-only-salt');
   const actorB = hashActorId('ci-actor-b', 'ci-only-salt');
