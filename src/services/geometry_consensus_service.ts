@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 export type GeometryConsensusMode = 'RAW_INDEPENDENT' | 'FIRST_PARTY_PUBLIC';
 export type GeometryConsensusReadinessState =
@@ -47,17 +47,22 @@ export const DEFAULT_GEOMETRY_CONSENSUS_THRESHOLDS: GeometryConsensusThresholds 
   minPairLengthRatio: 0.75
 };
 
+type ConsensusQueryable = Pick<Pool, 'query'> | Pick<PoolClient, 'query'>;
+
 /**
  * Evaluates whether already FULL_ROUTE_QA-gated child-route evidence is ready
  * for an editor to consider canonicalization. It does NOT create CanonicalTrack,
  * mutate Route, or infer legality/open status.
+ *
+ * Accepting a PoolClient allows the exact same readiness contract to be
+ * re-evaluated inside a SERIALIZABLE editorial activation transaction.
  *
  * The pairwise 30m overlap and Hausdorff calculation uses EPSG:3857 as an MVP
  * local-distance approximation; it is a readiness diagnostic, not canonical
  * route length/elevation computation. The thresholds remain explicit/configurable.
  */
 export async function evaluateGeometryConsensusReadiness(
-  pool: Pool,
+  pool: ConsensusQueryable,
   routeId: string,
   options?: {
     mode?: GeometryConsensusMode;
