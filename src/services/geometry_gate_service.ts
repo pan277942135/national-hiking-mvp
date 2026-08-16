@@ -17,8 +17,8 @@ export interface GeometryGateProfile {
   anchors: GeometryGateAnchor[];
   requireDirection?: 'FORWARD' | 'REVERSE' | 'EITHER';
   /**
-   * TARGET_ACCEPTED is allowed only when every anchor is within this class.
-   * The default is STRONG. NEAR is retained as diagnostic evidence only.
+   * Distance class required for this profile to pass spatial QA.
+   * TARGET_ACCEPTED is additionally restricted to FULL_ROUTE_QA profiles.
    */
   acceptanceClass?: 'STRONG' | 'NEAR';
 }
@@ -42,6 +42,7 @@ export type GeometryGateAssignmentState =
 export interface GeometryGateResult {
   profileId: string;
   profileVersion: number;
+  profilePurpose: GeometryGateProfile['purpose'];
   routeId: string;
   rawTrackId: string;
   provenanceClass: string;
@@ -54,6 +55,11 @@ export interface GeometryGateResult {
   evaluatedAt: string;
 }
 
+/**
+ * Historical S12 core anchors. This profile validates only the A01→A03 core
+ * corridor. It is intentionally CORE_QA, so even a perfect spatial pass can
+ * never become TARGET_ACCEPTED for the full S12-A child route.
+ */
 export const S12_CORE_QA_PROFILE_V1: GeometryGateProfile = {
   profileId: 'ZJ-S12-A-CORE-QA-V1',
   routeId: 'ZJ-S12-A',
@@ -199,19 +205,26 @@ export async function evaluateRawTrackGeometryGate(
     gateState = 'UNCLASSIFIED';
     assignmentState = 'UNCLASSIFIED';
     reasonCodes.push('NOT_RECORDED_EXECUTION');
-  } else if (allAnchorsAccepted && directionAccepted) {
+  } else if (allAnchorsAccepted && directionAccepted && profile.purpose === 'FULL_ROUTE_QA') {
     gateState = 'PASS';
     assignmentState = 'TARGET_ACCEPTED';
-    reasonCodes.push('SPATIAL_PROFILE_PASS');
+    reasonCodes.push('FULL_ROUTE_SPATIAL_PROFILE_PASS');
+  } else if (allAnchorsAccepted && directionAccepted && profile.purpose === 'CORE_QA') {
+    gateState = 'PASS';
+    assignmentState = 'UNCLASSIFIED';
+    reasonCodes.push('CORE_QA_PASS_NOT_FULL_ROUTE_ACCEPTANCE');
   } else {
     gateState = 'FAIL';
-    assignmentState = 'TARGET_REJECTED';
-    reasonCodes.push('SPATIAL_PROFILE_FAIL');
+    assignmentState = profile.purpose === 'FULL_ROUTE_QA' ? 'TARGET_REJECTED' : 'UNCLASSIFIED';
+    reasonCodes.push(
+      profile.purpose === 'FULL_ROUTE_QA' ? 'FULL_ROUTE_SPATIAL_PROFILE_FAIL' : 'CORE_QA_FAIL_DIAGNOSTIC_ONLY'
+    );
   }
 
   return {
     profileId: profile.profileId,
     profileVersion: profile.profileVersion,
+    profilePurpose: profile.purpose,
     routeId: profile.routeId,
     rawTrackId,
     provenanceClass: track.provenance_class,
@@ -270,7 +283,7 @@ export async function evaluateAndAssignCanonicalRawTrack(
       JSON.stringify({
         geometry_gate_profile_id: result.profileId,
         geometry_gate_profile_version: result.profileVersion,
-        purpose: input.profile.purpose,
+        purpose: result.profilePurpose,
         reason_codes: result.reasonCodes,
         anchors: result.anchors,
         evaluated_at: result.evaluatedAt
