@@ -4,19 +4,36 @@ import { getPgPool } from '../src/config/database.js';
 import { runDatabaseMigrations } from '../src/migration_runner.js';
 import { seedCanonicalDatabase } from '../db/canonical_seed_runner.js';
 import { CanonicalPostgresRepository } from '../src/repository/postgres/canonical_postgres.js';
+import {
+  assignCanonicalRawTrack,
+  ingestCanonicalRawTrack
+} from '../src/services/canonical_track_ingest_service.js';
+import {
+  hashActorId,
+  recordFirstPartyActivity
+} from '../src/services/first_party_activity_service.js';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL || process.env.PGHOST);
 
 async function resetCanonicalTables(): Promise<void> {
   const pool = getPgPool();
   assert.ok(pool, 'PostgreSQL pool must exist for DB integration tests');
-  // CI uses a fresh service container, but keeping the test deterministic makes
-  // reruns safe on the same ephemeral database.
   await pool.query(`
     DROP SCHEMA public CASCADE;
     CREATE SCHEMA public;
     GRANT ALL ON SCHEMA public TO public;
   `);
+}
+
+function recordedGpx(name: string, minuteOffset: number): string {
+  const t0 = new Date(Date.UTC(2026, 7, 16, 2, minuteOffset, 0));
+  const t1 = new Date(t0.getTime() + 5 * 60_000);
+  const t2 = new Date(t0.getTime() + 10 * 60_000);
+  return `<?xml version="1.0"?><gpx version="1.1"><trk><name>${name}</name><trkseg>
+<trkpt lat="32.0441" lon="118.8515"><time>${t0.toISOString()}</time></trkpt>
+<trkpt lat="32.0518" lon="118.8554"><time>${t1.toISOString()}</time></trkpt>
+<trkpt lat="32.0556" lon="118.8542"><time>${t2.toISOString()}</time></trkpt>
+</trkseg></trk></gpx>`;
 }
 
 test('Canonical PostGIS vertical slice: migrate -> seed -> repository replay', { skip: !hasDatabase }, async () => {
@@ -93,9 +110,6 @@ test('Canonical PostGIS vertical slice: migrate -> seed -> repository replay', {
   assert.equal(deps[0]?.stop_status, 'SOURCE_SWITCH');
   assert.match(deps[0]?.reopen_trigger ?? '', /2 independent accepted Recorded GPS executions/);
 
-  // The canonical production seed must not fabricate S12 RawTrack/Activity
-  // evidence. Geometry remains a legitimate external dependency until real
-  // evidence is ingested.
   assert.equal((await repo.listRawAssignments('ZJ-S12-A')).length, 0);
   assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 0);
   assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 0);
@@ -132,4 +146,131 @@ test('Canonical migration and seed replay are idempotent on live PostGIS', { ski
       WHERE field_value_id = 'SF-004' OR state = 'RUNTIME_ONLY'`
   );
   assert.equal(Number(runtimeLeak.rows[0]?.count ?? 0), 0);
+});
+
+test('RawTrack -> child assignment -> first-party consensus stays review-only until canonical promotion', { skip: !hasDatabase }, async () => {
+  const pool = getPgPool();
+  assert.ok(pool);
+  const repo = new CanonicalPostgresRepository(pool);
+
+  const gpx1 = await ingestCanonicalRawTrack(pool, {
+    format: 'GPX',
+    fileName: 's12_actor_a_day1.gpx',
+    payload: recordedGpx('S12 A day1', 0),
+    sourceTrackId: 'ci-s12-a-1'
+  });
+  const gpx2 = await ingestCanonicalRawTrack(pool, {
+    format: 'GPX',
+    fileName: 's12_actor_a_day2.gpx',
+    payload: recordedGpx('S12 A day2', 20),
+    sourceTrackId: 'ci-s12-a-2'
+  });
+  const gpx3 = await ingestCanonicalRawTrack(pool, {
+    format: 'GPX',
+    fileName: 's12_actor_b_day1.gpx',
+    payload: recordedGpx('S12 B day1', 40),
+    sourceTrackId: 'ci-s12-b-1'
+  });
+
+  for (const track of [gpx1, gpx2, gpx3]) {
+    assert.equal(track.provenanceClass, 'RECORDED_GPS');
+    assert.equal(track.recordedExecution, true);
+    assert.equal(track.pointCount, 3);
+    assert.equal(track.timestampCount, 3);
+  }
+
+  await assignCanonicalRawTrack(pool, {
+    rawTrackId: gpx1.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    independentProvenanceKey: 'CI-EXECUTION-A-1'
+  });
+  await assignCanonicalRawTrack(pool, {
+    rawTrackId: gpx2.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    independentProvenanceKey: 'CI-EXECUTION-A-2'
+  });
+  await assignCanonicalRawTrack(pool, {
+    rawTrackId: gpx3.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    independentProvenanceKey: 'CI-EXECUTION-B-1'
+  });
+
+  assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 3);
+
+  const planned = await ingestCanonicalRawTrack(pool, {
+    format: 'KML',
+    fileName: 's12_control.kml',
+    payload: '<kml><Placemark><LineString><coordinates>118.8515,32.0441 118.8554,32.0518 118.8542,32.0556</coordinates></LineString></Placemark></kml>'
+  });
+  assert.equal(planned.provenanceClass, 'PLANNED_NAVIGATION_LINE');
+  assert.equal(planned.recordedExecution, false);
+
+  await assert.rejects(
+    assignCanonicalRawTrack(pool, {
+      rawTrackId: planned.rawTrackId,
+      routeId: 'ZJ-S12-A',
+      assignmentState: 'TARGET_ACCEPTED',
+      geometryGateState: 'PASS'
+    }),
+    /TARGET_ACCEPTED requires recorded execution provenance/
+  );
+  await assignCanonicalRawTrack(pool, {
+    rawTrackId: planned.rawTrackId,
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'CONTROL_ONLY',
+    geometryGateState: 'CONTROL_ONLY'
+  });
+
+  const actorA = hashActorId('ci-actor-a', 'ci-only-salt');
+  const actorB = hashActorId('ci-actor-b', 'ci-only-salt');
+
+  await recordFirstPartyActivity(pool, {
+    actorHash: actorA,
+    rawTrackId: gpx1.rawTrackId,
+    recordedAt: '2026-08-16T02:00:00Z',
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    integrityState: 'PASS'
+  });
+  await recordFirstPartyActivity(pool, {
+    actorHash: actorA,
+    rawTrackId: gpx2.rawTrackId,
+    recordedAt: '2026-08-17T02:00:00Z',
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    integrityState: 'PASS'
+  });
+
+  assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 1,
+    'same actor across multiple days is repeatability support, not full independence');
+
+  await recordFirstPartyActivity(pool, {
+    actorHash: actorB,
+    rawTrackId: gpx3.rawTrackId,
+    recordedAt: '2026-08-18T02:00:00Z',
+    routeId: 'ZJ-S12-A',
+    assignmentState: 'TARGET_ACCEPTED',
+    geometryGateState: 'PASS',
+    integrityState: 'PASS'
+  });
+
+  assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 2);
+
+  const routeAfterEvidence = await repo.findRoute('ZJ-S12-A');
+  assert.equal(routeAfterEvidence?.route_state, 'GEOMETRY_BLOCKED',
+    'evidence ingestion must never auto-promote canonical route state');
+  assert.equal(routeAfterEvidence?.active_canonical_track_id, null);
+
+  const canonicalTrackCount = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM canonical_track WHERE route_id = 'ZJ-S12-A'`
+  );
+  assert.equal(Number(canonicalTrackCount.rows[0]?.count ?? 0), 0);
 });
