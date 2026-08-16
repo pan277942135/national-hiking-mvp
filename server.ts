@@ -19,6 +19,7 @@ import { evaluateRouteEligibility } from './src/services/eligibility_service.js'
 import { createRuntimeSnapshot } from './src/services/runtime_snapshot_service.js';
 import { projectRoutePage } from './src/services/page_projection_service.js';
 import { registerCanonicalDbRoutes } from './src/routes/canonical_db_routes.js';
+import { registerCanonicalActivationRoute } from './src/routes/canonical_activation_route.js';
 
 async function startServer() {
   const app = express();
@@ -33,6 +34,9 @@ async function startServer() {
   // Canonical DB routes are isolated from the demo UI namespace. When no DB is
   // configured they return 503 rather than silently falling back to demo data.
   registerCanonicalDbRoutes(app);
+  // Canonical geometry activation is an explicit, token-protected editorial
+  // action and is kept separate from ingestion/gating endpoints.
+  registerCanonicalActivationRoute(app);
 
   const { repos } = createMemoryRepositories();
   const seedResult = await loadSeedManifest(repos);
