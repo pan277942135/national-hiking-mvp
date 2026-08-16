@@ -1,6 +1,10 @@
 /**
- * Domain Types for National Hiking Backend MVP
- * Strict adherence to invariants and domain entities
+ * Memory/UI adapter DTOs for the National Hiking MVP.
+ *
+ * IMPORTANT: these TypeScript interfaces are NOT the canonical PostgreSQL
+ * persistence schema. The authoritative DB contract lives in `db/migrations`.
+ * Adapter fields may be convenient for the AI Studio UI, but must be mapped
+ * explicitly before crossing the canonical repository boundary.
  */
 
 export type AreaType =
@@ -9,18 +13,8 @@ export type AreaType =
   | 'ALPINE_CROSS_JURISDICTION'
   | 'STRICT_PROTECTED_AREA';
 
-export type ProtectionLevel =
-  | 'OPEN'
-  | 'SCENIC'
-  | 'NATURE_RESERVE'
-  | 'STRICT_PROTECTION';
-
-export type IdentityState =
-  | 'DRAFT'
-  | 'PROPOSED'
-  | 'CANONICAL'
-  | 'DEPRECATED';
-
+export type ProtectionLevel = 'OPEN' | 'SCENIC' | 'NATURE_RESERVE' | 'STRICT_PROTECTION';
+export type IdentityState = 'DRAFT' | 'PROPOSED' | 'CANONICAL' | 'DEPRECATED';
 export type GeometryState =
   | 'NO_GEOMETRY'
   | 'EXTERNAL_DEPENDENCY'
@@ -34,11 +28,7 @@ export type ProvenanceType =
   | 'PLANNED_NAVIGATION_LINE'
   | 'GEOMETRY_LINE_UNKNOWN';
 
-export type MatchStatus =
-  | 'ACCEPTED'
-  | 'REJECTED'
-  | 'CANDIDATE';
-
+export type MatchStatus = 'ACCEPTED' | 'REJECTED' | 'CANDIDATE';
 export type GateStatus =
   | 'ELIGIBLE'
   | 'GEOMETRY_BLOCKED'
@@ -62,12 +52,7 @@ export type LegalScopeType =
   | 'GENERAL_CONTROL_ZONE'
   | 'PUBLIC_ACCESS';
 
-export type HazardLevel =
-  | 'NORMAL'
-  | 'ADVISORY'
-  | 'WARNING'
-  | 'CRITICAL_HAZARD'
-  | 'CLOSED';
+export type HazardLevel = 'NORMAL' | 'ADVISORY' | 'WARNING' | 'CRITICAL_HAZARD' | 'CLOSED';
 
 export interface Area {
   id: string;
@@ -114,8 +99,9 @@ export interface RawTrack {
   id: string;
   sha256: string;
   file_name?: string;
-  format: 'GPX' | 'KML' | 'GEOJSON' | 'FIT';
+  format: 'GPX' | 'KML';
   provenance_type: ProvenanceType;
+  recorded_execution?: boolean;
   recorded_at?: string;
   point_count: number;
   total_distance_meters?: number;
@@ -131,7 +117,11 @@ export interface RawTrackRouteAssignment {
   id: string;
   track_id: string;
   route_id: string;
+  // Legacy memory-demo label. Canonical persistence uses assignment_state.
   match_status: MatchStatus;
+  assignment_state?: 'TARGET_ACCEPTED' | 'TARGET_REJECTED' | 'SIBLING_ACCEPTED' | 'CONTROL_ONLY' | 'UNCLASSIFIED';
+  geometry_gate_state?: string;
+  independent_provenance_key?: string;
   rejection_reason?: string;
   deviation_meters?: number;
   confidence_score?: number;
@@ -208,18 +198,21 @@ export interface FieldValue {
   created_at?: string;
 }
 
+/**
+ * First-party Activity adapter follows privacy-preserving actor hashing. Raw
+ * external user identity must not be stored in TrackEvidence/Activity consensus.
+ */
 export interface Activity {
   id: string;
-  user_id: string;
+  actor_hash: string;
   route_id: string;
-  raw_track_id?: string;
-  started_at: string;
-  ended_at: string;
-  completion_state: 'COMPLETED' | 'ABORTED' | 'PARTIAL' | 'DEVIATED';
+  raw_track_id: string;
+  recorded_at: string;
+  completion_state?: 'COMPLETED' | 'ABORTED' | 'PARTIAL' | 'DEVIATED';
+  integrity_state?: 'PASS' | 'REVIEW' | 'REJECT';
   actual_distance_meters?: number;
   actual_elevation_gain_meters?: number;
   duration_seconds?: number;
-  first_party_verified: boolean;
   report_notes?: string;
   created_at?: string;
 }
@@ -260,6 +253,8 @@ export interface PageProjection {
   projected_at: string;
 }
 
+// The remaining interfaces are UI adapter projections only. Their canonical
+// persistence shapes are defined in db/migrations.
 export interface ManagedComponent {
   id: string;
   area_id: string;
@@ -269,7 +264,6 @@ export interface ManagedComponent {
   metadata?: Record<string, unknown>;
   created_at?: string;
 }
-
 export interface POI {
   id: string;
   area_id: string;
@@ -281,7 +275,6 @@ export interface POI {
   metadata?: Record<string, unknown>;
   created_at?: string;
 }
-
 export interface AccessPoint {
   id: string;
   area_id: string;
@@ -293,7 +286,6 @@ export interface AccessPoint {
   metadata?: Record<string, unknown>;
   created_at?: string;
 }
-
 export interface Parking {
   id: string;
   area_id: string;
@@ -305,18 +297,17 @@ export interface Parking {
   metadata?: Record<string, unknown>;
   created_at?: string;
 }
-
 export interface CanonicalTrack {
   id: string;
   route_id: string;
-  source_track_id: string;
+  raw_source_track_ids: string[];
+  independent_execution_count: number;
   geojson: Record<string, unknown>;
   length_m: number;
   elevation_gain_m: number;
   verified_at: string;
   verifier_id?: string;
 }
-
 export interface Dependency {
   id: string;
   source_entity_type: string;
@@ -326,7 +317,6 @@ export interface Dependency {
   dependency_type: string;
   created_at?: string;
 }
-
 export interface ProtectedAreaZone {
   id: string;
   area_id: string;
@@ -337,4 +327,3 @@ export interface ProtectedAreaZone {
   entry_requires_permit: boolean;
   created_at?: string;
 }
-
