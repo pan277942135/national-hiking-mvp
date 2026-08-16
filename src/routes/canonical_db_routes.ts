@@ -7,7 +7,16 @@ import {
   type CanonicalAssignmentState,
   type CanonicalTrackFormat
 } from '../services/canonical_track_ingest_service.js';
+import {
+  evaluateAndAssignCanonicalRawTrack,
+  S12_CORE_QA_PROFILE_V1,
+  type GeometryGateProfile
+} from '../services/geometry_gate_service.js';
 import { recordFirstPartyActivity } from '../services/first_party_activity_service.js';
+
+const GEOMETRY_GATE_PROFILES: Readonly<Record<string, GeometryGateProfile>> = {
+  [S12_CORE_QA_PROFILE_V1.profileId]: S12_CORE_QA_PROFILE_V1
+};
 
 function unavailable(res: Response) {
   return res.status(503).json({
@@ -45,6 +54,12 @@ export function registerCanonicalDbRoutes(app: Express): void {
         route_families: families,
         routes,
         route_evidence: routeEvidence,
+        geometry_gate_profiles: Object.values(GEOMETRY_GATE_PROFILES).map(profile => ({
+          profile_id: profile.profileId,
+          route_id: profile.routeId,
+          purpose: profile.purpose,
+          profile_version: profile.profileVersion
+        })),
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -136,6 +151,10 @@ export function registerCanonicalDbRoutes(app: Express): void {
     }
   });
 
+  /**
+   * Low-level editorial classification endpoint. TARGET_ACCEPTED is forbidden
+   * here; target acceptance must be computed by the spatial geometry gate.
+   */
   app.post('/api/canonical/routes/:routeId/raw-assignments', async (req, res) => {
     const pool = getPgPool();
     if (!pool) return unavailable(res);
@@ -143,8 +162,14 @@ export function registerCanonicalDbRoutes(app: Express): void {
       const body = req.body ?? {};
       const assignmentState = String(body.assignmentState ?? '') as CanonicalAssignmentState;
       const allowed: CanonicalAssignmentState[] = [
-        'TARGET_ACCEPTED', 'TARGET_REJECTED', 'SIBLING_ACCEPTED', 'CONTROL_ONLY', 'UNCLASSIFIED'
+        'TARGET_REJECTED', 'SIBLING_ACCEPTED', 'CONTROL_ONLY', 'UNCLASSIFIED'
       ];
+      if (assignmentState === 'TARGET_ACCEPTED') {
+        return res.status(400).json({
+          error: 'DIRECT_TARGET_ACCEPTED_DISABLED',
+          message: 'Use /geometry-gate with a server-known profile; callers cannot force TARGET_ACCEPTED.'
+        });
+      }
       if (!allowed.includes(assignmentState)) {
         return res.status(400).json({ error: 'Invalid assignmentState.' });
       }
@@ -166,6 +191,53 @@ export function registerCanonicalDbRoutes(app: Express): void {
       res.status(201).json({
         repository_mode: 'CANONICAL_POSTGRES',
         assignment_saved: true,
+        route_mutated: false,
+        canonical_track_created: false
+      });
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * Spatial assignment endpoint. Clients may select only a server-known,
+   * versioned profile. Arbitrary anchors are intentionally not accepted.
+   */
+  app.post('/api/canonical/routes/:routeId/geometry-gate', async (req, res) => {
+    const pool = getPgPool();
+    if (!pool) return unavailable(res);
+    try {
+      const body = req.body ?? {};
+      if (typeof body.rawTrackId !== 'string' || typeof body.profileId !== 'string') {
+        return res.status(400).json({ error: 'rawTrackId and profileId are required.' });
+      }
+      const profile = GEOMETRY_GATE_PROFILES[body.profileId];
+      if (!profile) {
+        return res.status(400).json({
+          error: 'UNKNOWN_GEOMETRY_GATE_PROFILE',
+          allowed_profile_ids: Object.keys(GEOMETRY_GATE_PROFILES)
+        });
+      }
+      if (profile.routeId !== req.params.routeId) {
+        return res.status(400).json({
+          error: 'PROFILE_ROUTE_MISMATCH',
+          profile_route_id: profile.routeId,
+          requested_route_id: req.params.routeId
+        });
+      }
+
+      const result = await evaluateAndAssignCanonicalRawTrack(pool, {
+        rawTrackId: body.rawTrackId,
+        routeId: req.params.routeId,
+        profile,
+        independentProvenanceKey: typeof body.independentProvenanceKey === 'string'
+          ? body.independentProvenanceKey
+          : undefined
+      });
+      res.status(200).json({
+        repository_mode: 'CANONICAL_POSTGRES',
+        data_classification: 'GEOMETRY_GATE_RESULT',
+        result,
         route_mutated: false,
         canonical_track_created: false
       });
