@@ -1,0 +1,41 @@
+{
+  "version": "0.2",
+  "source": "National_Hiking_MVP_Seed_Migration_V0.1.xlsx + RouteFamily/Raw updates",
+  "areas": [
+    {"area_id":"AREA-NJ-ZIJINSHAN","area_type":"NATURAL","canonical_name":"紫金山","static_gate":"PASS"},
+    {"area_id":"AREA-SZ-WESTERN-MOUNTAINS","area_type":"COMPOSITE","canonical_name":"苏州西部山系","static_gate":"PASS_WITH_DEPENDENCIES"},
+    {"area_id":"AREA-JX-WUGONGSHAN","area_type":"COMPOSITE","canonical_name":"武功山","static_gate":"MIGRATION_PASS"},
+    {"area_id":"AREA-NP-WUYISHAN","area_type":"PROTECTED","canonical_name":"武夷山国家公园","static_gate":"MIGRATION_PASS"}
+  ],
+  "route_families": [
+    {"route_family_id":"ZJ-S12-RF","area_id":"AREA-NJ-ZIJINSHAN","canonical_name":"紫金山南麓绿道轻徒步","identity_state":"CANONICAL_FAMILY"},
+    {"route_family_id":"SZ-LB-S01","area_id":"AREA-SZ-WESTERN-MOUNTAINS","canonical_name":"标准灵白线","identity_state":"SUPPORTED_HIGH"}
+  ],
+  "routes": [
+    {"route_id":"ROUTE-NJ-ZJ-001","area_id":"AREA-NJ-ZIJINSHAN","canonical_name":"蒋王庙—头陀岭—蒋王庙","route_state":"EXECUTABLE","asset_state":"CANONICAL_ASSET_PENDING_RUNTIME"},
+    {"route_id":"ROUTE-NJ-ZJ-002","area_id":"AREA-NJ-ZIJINSHAN","canonical_name":"范鸿仙墓—头陀岭—蒋王庙","route_state":"EXECUTABLE","asset_state":"CANONICAL_ASSET_PENDING_RUNTIME"},
+    {"route_id":"ZJ-S12-A","area_id":"AREA-NJ-ZIJINSHAN","route_family_id":"ZJ-S12-RF","canonical_name":"下马坊—邮政博物馆—地震科学馆—流徽榭","identity_state":"CANONICAL","route_state":"GEOMETRY_BLOCKED"},
+    {"route_id":"ROUTE-WG-AT-10946833","area_id":"AREA-JX-WUGONGSHAN","canonical_name":"Longshan Village→Dongjiang Village","route_state":"RULE_BLOCKED"}
+  ],
+  "field_values": [
+    {"id":"SF-001","entity_type":"area","entity_id":"AREA-NJ-ZIJINSHAN","field_key":"opening_hours_summary","state":"CANONICAL","value":"NO_SINGLE_SCHEDULE / component-scoped","confidence":0.98,"import":"IMPORT"},
+    {"id":"SF-002","entity_type":"area","entity_id":"AREA-NJ-ZIJINSHAN","field_key":"ticket_fee_summary","state":"CANONICAL","value":"NO_SINGLE_FEE / component-scoped","confidence":0.95,"import":"IMPORT"},
+    {"id":"SF-003","entity_type":"area","entity_id":"AREA-NJ-ZIJINSHAN","field_key":"night_legal_access_state","state":"LEGITIMATE_UNKNOWN","value":"UNKNOWN","confidence":0.15,"import":"IMPORT_UNKNOWN"},
+    {"id":"SF-004","entity_type":"area","entity_id":"AREA-NJ-ZIJINSHAN","field_key":"realtime_exception_state","state":"RUNTIME_ONLY","value":"QUERY_TIME","confidence":0.5,"import":"NO_STATIC_VALUE"},
+    {"id":"SF-008","entity_type":"poi","entity_id":"POI-SZ-001","field_key":"ticket_price_ceiling_rmb","state":"CANONICAL","value":20,"confidence":0.99,"import":"IMPORT"},
+    {"id":"SF-009","entity_type":"poi","entity_id":"POI-SZ-001","field_key":"ticket_actual_current","state":"RECHECK_REQUIRED","value":"UNKNOWN_CURRENT_ACTUAL","confidence":0.62,"import":"IMPORT_DEPENDENCY"},
+    {"id":"SF-011","entity_type":"area","entity_id":"AREA-JX-WUGONGSHAN","field_key":"camping_scope_rule","state":"CANONICAL","value":"DESIGNATED_AREAS_ONLY","confidence":0.99,"import":"IMPORT"},
+    {"id":"SF-013","entity_type":"route","entity_id":"ROUTE-WG-AT-10946833","field_key":"legal_scope_state","state":"BLOCKED_LEGALITY","value":"UNKNOWN","confidence":0.2,"import":"IMPORT_BLOCK"},
+    {"id":"SF-014","entity_type":"area","entity_id":"AREA-NP-WUYISHAN","field_key":"publication_default","state":"CANONICAL","value":"NO_ROUTE_UNLESS_AUTHORIZED","confidence":0.99,"import":"IMPORT"},
+    {"id":"SF-015","entity_type":"protected_area_zone","entity_id":"ZONE-WY-CORE","field_key":"access_default","state":"CANONICAL","value":"PROHIBITED","confidence":0.995,"import":"IMPORT"},
+    {"id":"SF-016","entity_type":"protected_area_zone","entity_id":"ZONE-WY-GENERAL","field_key":"access_default","state":"CANONICAL","value":"CONTROLLED","confidence":0.99,"import":"IMPORT"}
+  ],
+  "dependencies": [
+    {"dependency_id":"DEP-ZJ-S12","entity_type":"route","entity_id":"ZJ-S12-A","field_key":"canonical_geometry","class":"ROUTE_COVERAGE","state":"OPEN","stop_status":"SOURCE_SWITCH","reopen_trigger":"2 independent accepted Recorded GPS executions"},
+    {"dependency_id":"DEP-SZ-RAW","entity_type":"route_family","entity_id":"SZ-LB-S01","field_key":"raw_geometry","class":"EXTERNAL_SOURCE","state":"OPEN","stop_status":"SOURCE_SWITCH","reopen_trigger":"raw KML/GPX"},
+    {"dependency_id":"DEP-SZ-BAIHE","entity_type":"poi","entity_id":"POI-SZ-005","field_key":"current_state","class":"EXTERNAL_SOURCE","state":"OPEN","stop_status":"SOURCE_SWITCH","reopen_trigger":"current explicit evidence"},
+    {"dependency_id":"DEP-WG-LEGAL","entity_type":"route","entity_id":"ROUTE-WG-AT-10946833","field_key":"legal_scope_state","class":"LEGAL_SCOPE","state":"OPEN","stop_status":"CONTINUE","reopen_trigger":"all segments classified"},
+    {"dependency_id":"DEP-WG-CAMP","entity_type":"route","entity_id":"ROUTE-WG-AT-10946833","field_key":"camping_legality_state","class":"OVERNIGHT","state":"OPEN","stop_status":"CONTINUE","reopen_trigger":"overnight stop maps to designated campground"},
+    {"dependency_id":"DEP-WY-AUTH","entity_type":"protected_route","entity_id":"candidate protected route","field_key":"authorization","class":"AUTHORIZATION","state":"OPEN","stop_status":"CONTINUE","reopen_trigger":"positive public authorization"}
+  ]
+}
