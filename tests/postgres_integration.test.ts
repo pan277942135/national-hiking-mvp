@@ -30,11 +30,16 @@ test('Canonical PostGIS vertical slice: migrate -> seed -> repository replay', {
   assert.equal(migration.mode, 'LIVE_DB');
   assert.equal(migration.applied.length, 10);
 
+  const postgis = await pool.query<{ version: string }>('SELECT postgis_version() AS version');
+  assert.match(postgis.rows[0]?.version ?? '', /^3\./);
+
   const seed = await seedCanonicalDatabase();
   assert.equal(seed.success, true);
   assert.equal(seed.mode, 'LIVE_DB');
   assert.equal(seed.areas, 4);
   assert.equal(seed.routes, 4);
+  assert.equal(seed.fieldValues, 10, 'SF-004 is runtime-only and must not be imported as static truth');
+  assert.deepEqual(seed.skippedRuntimeOnlyFieldValues, ['SF-004']);
 
   const repo = new CanonicalPostgresRepository(pool);
   const migrations = await repo.getAppliedMigrationNames();
@@ -75,6 +80,13 @@ test('Canonical PostGIS vertical slice: migrate -> seed -> repository replay', {
   assert.equal(nightState.state, 'LEGITIMATE_UNKNOWN');
   assert.equal(nightState.value, 'UNKNOWN');
 
+  const runtimeLeak = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM field_value
+      WHERE field_value_id = 'SF-004' OR state = 'RUNTIME_ONLY'`
+  );
+  assert.equal(Number(runtimeLeak.rows[0]?.count ?? 0), 0);
+
   const deps = await repo.listDependenciesForEntity('route', 'ZJ-S12-A');
   assert.equal(deps.length, 1);
   assert.equal(deps[0]?.dependency_id, 'DEP-ZJ-S12');
@@ -87,18 +99,37 @@ test('Canonical PostGIS vertical slice: migrate -> seed -> repository replay', {
   assert.equal((await repo.listRawAssignments('ZJ-S12-A')).length, 0);
   assert.equal(await repo.countIndependentAcceptedRawExecutions('ZJ-S12-A'), 0);
   assert.equal(await repo.countIndependentAcceptedActors('ZJ-S12-A'), 0);
+
+  const s12CanonicalTrack = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM canonical_track WHERE route_id = 'ZJ-S12-A'`
+  );
+  assert.equal(Number(s12CanonicalTrack.rows[0]?.count ?? 0), 0);
 });
 
-test('Canonical seed is idempotent against the live PostGIS schema', { skip: !hasDatabase }, async () => {
+test('Canonical migration and seed replay are idempotent on live PostGIS', { skip: !hasDatabase }, async () => {
   const pool = getPgPool();
   assert.ok(pool);
+
+  const migration = await runDatabaseMigrations();
+  assert.equal(migration.success, true, migration.message);
+  assert.equal(migration.mode, 'LIVE_DB');
+  assert.deepEqual(migration.applied, []);
+
   const first = await seedCanonicalDatabase();
   const second = await seedCanonicalDatabase();
   assert.equal(first.success, true);
   assert.equal(second.success, true);
+  assert.deepEqual(second.skippedRuntimeOnlyFieldValues, ['SF-004']);
 
   const repo = new CanonicalPostgresRepository(pool);
   assert.equal((await repo.listAreas()).length, 4);
   assert.equal((await repo.listRoutes()).length, 4);
   assert.equal((await repo.listDependenciesForEntity('route', 'ZJ-S12-A')).length, 1);
+
+  const runtimeLeak = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM field_value
+      WHERE field_value_id = 'SF-004' OR state = 'RUNTIME_ONLY'`
+  );
+  assert.equal(Number(runtimeLeak.rows[0]?.count ?? 0), 0);
 });
