@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 export type CanonicalWriteAuthResult =
-  | { authorized: true }
+  | { authorized: true; code?: undefined }
   | { authorized: false; code: 'CANONICAL_WRITES_DISABLED' | 'CANONICAL_WRITE_UNAUTHORIZED' };
 
 function constantTimeEqual(a: string, b: string): boolean {
