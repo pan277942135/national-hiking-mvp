@@ -1,16 +1,22 @@
 /**
- * Eligibility Service for National Hiking Backend MVP
- * Coordinates hard gate checks for Route candidates and generates publication determinations.
+ * Eligibility Service for National Hiking Backend MVP.
+ * Coordinates hard-gate checks without mutating canonical Route truth.
  */
 
 import { Repositories } from '../repository/repositories.js';
 import { evaluateHardGate } from '../domain/hard_gate.js';
-import { PublicationGateResult, Route, Area } from '../domain/types.js';
+import { PublicationGateResult, Route, Area, Rule } from '../domain/types.js';
 
 export interface RouteEligibilityQuery {
   routeId: string;
   userHasPositiveAuth?: boolean;
   evaluationTime?: Date;
+}
+
+function dedupeRules(rules: Rule[]): Rule[] {
+  const byId = new Map<string, Rule>();
+  for (const rule of rules) byId.set(rule.id, rule);
+  return [...byId.values()];
 }
 
 export async function evaluateRouteEligibility(
@@ -22,25 +28,19 @@ export async function evaluateRouteEligibility(
   gateResult: PublicationGateResult;
 }> {
   const route = await repos.routes.findById(query.routeId);
-  if (!route) {
-    throw new Error(`Route not found: ${query.routeId}`);
-  }
+  if (!route) throw new Error(`Route not found: ${query.routeId}`);
 
   const family = await repos.routeFamilies.findById(route.family_id);
-  if (!family) {
-    throw new Error(`RouteFamily not found for route ${route.id}`);
-  }
+  if (!family) throw new Error(`RouteFamily not found for route ${route.id}`);
 
   const area = await repos.areas.findById(family.area_id);
-  if (!area) {
-    throw new Error(`Area not found for route family ${family.id}`);
-  }
+  if (!area) throw new Error(`Area not found for route family ${family.id}`);
 
   const assignments = await repos.assignments.findByRouteId(route.id);
   const tracks = await repos.rawTracks.listAll();
-  const rules = await repos.rules.findByAreaId(area.id);
+  const areaRules = await repos.rules.findByAreaId(area.id);
   const routeRules = await repos.rules.findByRouteId(route.id);
-  const allRules = [...rules, ...routeRules];
+  const allRules = dedupeRules([...areaRules, ...routeRules]);
   const legalScopes = await repos.legalScopes.findByAreaId(area.id);
   const latestSnapshot = (await repos.runtimeSnapshots.findLatestForRoute(route.id)) ||
                          (await repos.runtimeSnapshots.findLatestForArea(area.id)) ||
@@ -58,12 +58,8 @@ export async function evaluateRouteEligibility(
     currentTime: query.evaluationTime
   });
 
-  // Save the evaluation history without mutating the canonical Route definition
+  // Gate results are derived audit history only; canonical Route is untouched.
   await repos.gateResults.save(gateResult);
 
-  return {
-    route,
-    area,
-    gateResult
-  };
+  return { route, area, gateResult };
 }
