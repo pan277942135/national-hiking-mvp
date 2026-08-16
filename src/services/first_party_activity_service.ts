@@ -75,8 +75,9 @@ export async function recordFirstPartyActivity(
     const rawAssignment = await pool.query<{
       assignment_state: RecordFirstPartyActivityInput['assignmentState'] | 'UNCLASSIFIED';
       geometry_gate_state: string;
+      purpose: string | null;
     }>(
-      `SELECT assignment_state, geometry_gate_state
+      `SELECT assignment_state, geometry_gate_state, qa->>'purpose' AS purpose
          FROM raw_track_route_assignment
         WHERE raw_track_id = $1 AND route_id = $2`,
       [input.rawTrackId, input.routeId]
@@ -94,10 +95,14 @@ export async function recordFirstPartyActivity(
     }
     if (
       input.assignmentState === 'TARGET_ACCEPTED' &&
-      (gateTruth.assignment_state !== 'TARGET_ACCEPTED' || gateTruth.geometry_gate_state !== 'PASS')
+      (
+        gateTruth.assignment_state !== 'TARGET_ACCEPTED' ||
+        gateTruth.geometry_gate_state !== 'PASS' ||
+        gateTruth.purpose !== 'FULL_ROUTE_QA'
+      )
     ) {
       throw new Error(
-        'First-party TARGET_ACCEPTED requires a prior spatial RawTrack TARGET_ACCEPTED/PASS assignment'
+        'First-party TARGET_ACCEPTED requires a prior FULL_ROUTE_QA RawTrack TARGET_ACCEPTED/PASS assignment'
       );
     }
     if (input.geometryGateState && input.geometryGateState !== gateTruth.geometry_gate_state) {
@@ -154,7 +159,8 @@ export async function recordFirstPartyActivity(
         derivedGeometryGateState,
         JSON.stringify({
           source_raw_track_id: input.rawTrackId,
-          assignment_derived_from_raw_track_gate: true
+          assignment_derived_from_raw_track_gate: true,
+          source_geometry_gate_purpose: gateTruthPurposeForAudit(input.assignmentState)
         })
       ]
     );
@@ -169,4 +175,10 @@ export async function recordFirstPartyActivity(
     actorHash: input.actorHash,
     created: !existing.rows[0]
   };
+}
+
+function gateTruthPurposeForAudit(
+  assignmentState: RecordFirstPartyActivityInput['assignmentState']
+): string | null {
+  return assignmentState === 'TARGET_ACCEPTED' ? 'FULL_ROUTE_QA_REQUIRED' : null;
 }
