@@ -3,13 +3,18 @@ import { getPgPool } from '../src/config/database.js';
 import { createRawSource } from '../src/services/raw_source_service.js';
 
 const AREA_ID = 'area_zijinshan';
-const OPENING_URL = 'https://zschina.nanjing.gov.cn/fjms/fwzn/kfsj/';
+const OPENING_URL = 'https://zschina.nanjing.gov.cn/fjms/jqjd/zjssd/';
 const REOPEN_URL = 'https://www.nanjing.gov.cn/njxx/202607/t20260714_5876179.html';
 const TOURISM_INDEX_URL = 'https://zschina.nanjing.gov.cn/lyzx/';
 const FIELD_ID = 'fv_zj_current_operational_status';
 const EVIDENCE_ID = 'ev_zj_current_operational_status';
 
 type AnyRecord = Record<string, any>;
+
+type OfficialFetch = {
+  html: string;
+  contentType: string;
+};
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -33,15 +38,31 @@ function normalizeText(html: string): string {
     .trim();
 }
 
-async function fetchOfficial(url: string): Promise<{ html: string; contentType: string }> {
-  const response = await fetch(url, {
-    headers: { 'user-agent': 'NationalHikingMVP/0.1 (+operational-status-refresh)' }
-  });
-  if (!response.ok) throw new Error(`Fetch failed ${response.status}: ${url}`);
-  return {
-    html: await response.text(),
-    contentType: response.headers.get('content-type') || 'text/html; charset=utf-8'
-  };
+async function fetchOfficial(url: string): Promise<OfficialFetch> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      headers: { 'user-agent': 'NationalHikingMVP/0.1 (+operational-status-refresh)' },
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Fetch failed ${response.status}: ${url}`);
+    return {
+      html: await response.text(),
+      contentType: response.headers.get('content-type') || 'text/html; charset=utf-8'
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchOptional(url: string): Promise<OfficialFetch | null> {
+  try {
+    return await fetchOfficial(url);
+  } catch (error) {
+    console.warn(`[STATUS] Optional official source unavailable: ${url} :: ${(error as Error).message}`);
+    return null;
+  }
 }
 
 async function storeOfficialRaw(
@@ -73,29 +94,31 @@ async function writeSupportedOperationalStatus(pool: any) {
   const [opening, reopen, tourism] = await Promise.all([
     fetchOfficial(OPENING_URL),
     fetchOfficial(REOPEN_URL),
-    fetchOfficial(TOURISM_INDEX_URL)
+    fetchOptional(TOURISM_INDEX_URL)
   ]);
 
   const openingText = normalizeText(opening.html);
   const reopenText = normalizeText(reopen.html);
-  const tourismText = normalizeText(tourism.html);
+  const tourismText = tourism ? normalizeText(tourism.html) : '';
 
   const signals = {
-    standing_opening_page: /景区开放时间|开放时间/.test(openingText),
-    zijinshan_service_present: /紫金山索道|紫金山天文台/.test(openingText),
+    standing_opening_page: /开放时间/.test(openingText),
+    zijinshan_service_present: /紫金山天文台|紫金山索道/.test(openingText),
     explicit_reopen_notice: /钟山风景区/.test(reopenText) && /恢复正常对外开放/.test(reopenText),
-    post_reopen_tourism_activity: /2026-07-2[0-9]|2026-07-1[4-9]/.test(tourismText) || /暑期|毕业旅行|钟山/.test(tourismText)
+    post_reopen_tourism_activity: tourism
+      ? (/2026-07-2[0-9]|2026-07-1[4-9]/.test(tourismText) || /暑期|毕业旅行|钟山/.test(tourismText))
+      : null
   };
 
   if (!signals.standing_opening_page || !signals.zijinshan_service_present || !signals.explicit_reopen_notice) {
     throw new Error(`Operational status evidence validation failed: ${JSON.stringify(signals)}`);
   }
 
-  const raws = [];
+  const raws: AnyRecord[] = [];
   raws.push(await storeOfficialRaw(
     OPENING_URL,
     'ZSCHINA_NANJING_GOV_CN',
-    'CURRENT_OPERATIONAL_STATUS_STANDING_SCHEDULE',
+    'CURRENT_OPERATIONAL_STATUS_STANDING_COMPONENT_SCHEDULE',
     opening.html,
     opening.contentType
   ));
@@ -106,13 +129,15 @@ async function writeSupportedOperationalStatus(pool: any) {
     reopen.html,
     reopen.contentType
   ));
-  raws.push(await storeOfficialRaw(
-    TOURISM_INDEX_URL,
-    'ZSCHINA_NANJING_GOV_CN',
-    'CURRENT_OPERATIONAL_STATUS_RECENT_ACTIVITY',
-    tourism.html,
-    tourism.contentType
-  ));
+  if (tourism) {
+    raws.push(await storeOfficialRaw(
+      TOURISM_INDEX_URL,
+      'ZSCHINA_NANJING_GOV_CN',
+      'CURRENT_OPERATIONAL_STATUS_RECENT_ACTIVITY_AUXILIARY',
+      tourism.html,
+      tourism.contentType
+    ));
+  }
 
   const value = {
     state: 'SUPPORTED',
@@ -124,11 +149,12 @@ async function writeSupportedOperationalStatus(pool: any) {
       observed_at: '2026-07-13T14:00:00+08:00',
       source_url: REOPEN_URL
     },
-    standing_schedule_checked: true,
-    recent_official_tourism_activity_checked: true,
+    standing_component_schedule_checked: true,
+    recent_official_tourism_activity_checked: tourism ? signals.post_reopen_tourism_activity : false,
     raw_source_ids: raws.map(r => r.id),
     limitations: [
-      'This is not a same-minute live gate signal.',
+      'SUPPORTED is not a same-minute canonical OPEN assertion.',
+      'Standing component schedules do not imply every trail or sub-area is open.',
       'Temporary weather, maintenance or safety closures may supersede standing schedules.',
       'Refresh every 24 hours and immediately on an explicit closure/reopening notice.'
     ]
