@@ -1,6 +1,6 @@
 /**
  * Migration Runner for National Hiking Backend MVP
- * Validates, checks, and applies migrations 0001 through 0010.
+ * Validates, checks, and applies migrations 0001 through 0011.
  */
 
 import fs from 'node:fs';
@@ -64,7 +64,8 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
     '0007_runtime_snapshots.sql',
     '0008_activities_and_first_party_evidence.sql',
     '0009_publication_and_eligibility_gates.sql',
-    '0010_page_projections_and_indexes.sql'
+    '0010_page_projections_and_indexes.sql',
+    '0011_raw_sources.sql'
   ];
 
   const migrationsFound: MigrationFile[] = [];
@@ -89,7 +90,7 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
   const allSql = migrationsFound.map(m => m.sql).join('\n');
 
   // Verify critical invariants in DDL
-  const orderedSequentially = migrationsFound.length === 10 && errors.length === 0;
+  const orderedSequentially = migrationsFound.length === 11 && errors.length === 0;
   const foreignKeysDeclared = allSql.includes('REFERENCES route_families(id)') &&
                               allSql.includes('REFERENCES routes(id)') &&
                               allSql.includes('REFERENCES areas(id)');
@@ -141,7 +142,7 @@ export async function runDatabaseMigrations(): Promise<{ success: boolean; appli
     return {
       success: true,
       applied: validation.migrationsFound.map(m => m.name),
-      message: 'Validated 10/10 migrations successfully in dry-run mode (External DATABASE_URL not attached).'
+      message: 'Validated 11/11 migrations successfully in dry-run mode (External DATABASE_URL not attached).'
     };
   }
 
@@ -180,7 +181,7 @@ export async function runDatabaseMigrations(): Promise<{ success: boolean; appli
       applied,
       message: applied.length > 0
         ? `Applied ${applied.length} migrations to PostgreSQL.`
-        : 'All 10 migrations already up to date.'
+        : 'All 11 migrations already up to date.'
     };
   } catch (err: unknown) {
     await client.query('ROLLBACK');
