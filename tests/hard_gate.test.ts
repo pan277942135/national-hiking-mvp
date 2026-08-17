@@ -18,10 +18,10 @@ import {
   assertRuntimeSnapshotValidity
 } from '../src/domain/invariants.js';
 
-test('Migration Suite: Validates 0001 through 0010 sequentially and checks invariants', () => {
+test('Migration Suite: Validates 0001 through 0011 sequentially and checks invariants', () => {
   const result = loadAndValidateMigrations();
   assert.equal(result.valid, true, `Migrations must be valid: ${result.errors.join(', ')}`);
-  assert.equal(result.migrationsFound.length, 10, 'Must have exactly 10 migrations');
+  assert.equal(result.migrationsFound.length, 11, 'Must have exactly 11 migrations');
   assert.equal(result.invariantsVerified.orderedSequentially, true);
   assert.equal(result.invariantsVerified.foreignKeysDeclared, true);
   assert.equal(result.invariantsVerified.oneCurrentFieldValueInvariant, true);
@@ -35,8 +35,8 @@ test('Seed Idempotency: Second identical seed run produces zero mutations', asyn
   assert.ok(run1.mutationsCreated > 0, 'First run should create entities');
 
   const run2 = await loadSeedManifest(repos);
-  assert.equal(run2.mutationsCreated, 0, 'Second identical run must create 0 mutations');
-  assert.equal(run2.mutationsUpdated, 0, 'Second identical run must update 0 mutations');
+  assert.equal(run2.mutationsCreated, 0, 'Second identical seed run must create 0 mutations');
+  assert.equal(run2.mutationsUpdated, 0, 'Second identical seed run must update 0 mutations');
 });
 
 test('Zijinshan Regression State: ZJ-S12-A geometry missing => navigation disabled (GEOMETRY_BLOCKED)', async () => {
@@ -63,12 +63,10 @@ test('Planned Line Invariant: KML planned line is CONTROL_ONLY and does NOT prom
 
   assert.equal(kmlUpload.provenanceType, 'PLANNED_NAVIGATION_LINE');
 
-  // Verify track is distinct from Route (Invariant 1)
   const route = await repos.routes.findById('route_zj_s12_a');
   assert.ok(route);
   assertTrackNotRoute(kmlUpload.track, route);
 
-  // Still GEOMETRY_BLOCKED
   const res = await evaluateRouteEligibility(repos, { routeId: 'route_zj_s12_a' });
   assert.equal(res.gateResult.navigation_executable, false);
 });
@@ -90,7 +88,6 @@ test('Sibling Isolation: Sibling variant B (ZJ-S12-B) geometry does NOT promote 
   assert.equal(acceptedA.length, 0, 'Target route A has 0 accepted GPS tracks');
   assert.ok(acceptedB.length > 0, 'Sibling route B has accepted GPS tracks');
 
-  // Assert invariant check passes (no overlap)
   assertSiblingTracksSeparated(routeA.id, routeB.id, acceptedA, acceptedB);
 
   const resA = await evaluateRouteEligibility(repos, { routeId: routeA.id });
@@ -102,7 +99,6 @@ test('Alpine Runtime Invariant: Stale runtime snapshot forces RUNTIME_DATA_REQUI
   const { repos } = createMemoryRepositories();
   await loadSeedManifest(repos);
 
-  // Wugongshan has stale snapshot (from 2026-08-15) and evaluation is in 2026-08-16
   const res = await evaluateRouteEligibility(repos, {
     routeId: 'route_wg_alp_01',
     evaluationTime: new Date('2026-08-16T12:00:00.000Z')
@@ -127,7 +123,6 @@ test('Positive Authorization Invariant: Missing permit demotes route to DISCOVER
   const { repos } = createMemoryRepositories();
   await loadSeedManifest(repos);
 
-  // Without authorization
   const unauthRes = await evaluateRouteEligibility(repos, {
     routeId: 'route_wy_buffer_01',
     userHasPositiveAuth: false
@@ -136,7 +131,6 @@ test('Positive Authorization Invariant: Missing permit demotes route to DISCOVER
   assert.equal(unauthRes.gateResult.navigation_executable, false);
   assert.ok(unauthRes.gateResult.reasons.some(r => r.includes('POSITIVE_AUTHORIZATION')));
 
-  // With positive authorization
   const authRes = await evaluateRouteEligibility(repos, {
     routeId: 'route_wy_buffer_01',
     userHasPositiveAuth: true
