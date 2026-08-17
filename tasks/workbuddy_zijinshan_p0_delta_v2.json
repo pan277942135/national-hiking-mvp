@@ -1,0 +1,103 @@
+{
+  "task_version": "2.0",
+  "task_id": "WB-ZJ-P0-DELTA-002",
+  "area_id": "area_zijinshan",
+  "objective": "基于2026-08-17既有WorkBuddy交付，只补仍未达到Gate的真实缺口；禁止重复采集已覆盖内容。",
+  "already_covered_do_not_repeat": [
+    "2026-08-12恢复开放及此前台风临时关闭的历史状态证据",
+    "钟山风景区机动车预约停车规则",
+    "钟山风景区核心区/外围区通用停车收费标准",
+    "白马公园开放时间",
+    "目标走廊是否真实可走的documented walk佐证",
+    "紫金山热门程度、Route Universe泛化发现、综合热度代理指标"
+  ],
+  "remaining_collections": [
+    {
+      "gap_key": "night_access_policy_entry_level",
+      "priority": "P0",
+      "targets": [
+        "蒋王庙登山口",
+        "板仓街/锁金村方向主要登山入口",
+        "下马坊/孝陵卫方向进入山体/绿道的实际入口"
+      ],
+      "goal": "获取入口级而非山体泛化的夜间开放/门禁/拦阻证据。",
+      "preferred_sources": [
+        "中山陵园管理局或森林管理处官方说明",
+        "入口现场公告/门禁/围栏照片",
+        "近90天独立现场观察"
+      ],
+      "required_fields": [
+        "access_point_name",
+        "source_platform",
+        "source_url",
+        "native_id",
+        "published_at",
+        "captured_at",
+        "raw_text_or_caption",
+        "screenshot_or_image_reference",
+        "gate_or_barrier_observation",
+        "claimed_opening_or_closing_time",
+        "observation_scope",
+        "confidence_notes"
+      ],
+      "stop_rule": "每个目标入口至少1条高权威入口级证据，或2条近90天独立现场观察；找不到则明确UNKNOWN，不把‘紫金山24小时’泛化到具体入口。"
+    },
+    {
+      "gap_key": "route_zj_s12_a_recorded_gps",
+      "priority": "P0",
+      "target_route": "下马坊/驿站 → 民国邮政博物馆/陵园邮局 → 南京地震科学馆/地震台 → 流徽榭",
+      "goal": "找到能够进入系统QA的真实Recorded GPS候选，而不是攻略、路径规划或documented walk。",
+      "preferred_sources": ["两步路", "六只脚", "其他可合法下载GPX/KML的实走轨迹平台"],
+      "queries": [
+        "下马坊 邮政博物馆 地震台 流徽榭 轨迹",
+        "孝陵卫 陵园邮局 地震台 流徽榭 GPX",
+        "下马坊 绿道 陵园邮局 流徽榭",
+        "T80 绿道 陵园邮局 流徽榭"
+      ],
+      "required_fields": [
+        "source_platform",
+        "track_id",
+        "source_url",
+        "title",
+        "author",
+        "recorded_or_published_at",
+        "captured_at",
+        "distance_km",
+        "elevation_gain_m",
+        "duration",
+        "start_name",
+        "end_name",
+        "poi_sequence",
+        "popularity_metrics_raw",
+        "is_complete_claim",
+        "download_url_if_legitimate",
+        "local_file_name_if_legitimate",
+        "block_reason_if_any"
+      ],
+      "exclude": [
+        "仅包含流徽榭或邮政博物馆但不覆盖目标走廊的长距离全山轨迹",
+        "规划导航线",
+        "社区话题帖但无Recorded GPS",
+        "腾讯/高德路径规划",
+        "documented walk文字路线"
+      ],
+      "known_prior_candidates": [
+        {"platform":"六只脚","track_id":"1092060","disposition":"LOW_VALUE_FOR_S12_A","reason":"31.8km全域穿越，非目标走廊专属"},
+        {"platform":"六只脚","track_id":"1862097","disposition":"LOW_VALUE_FOR_S12_A","reason":"15.3km全山穿越，非目标走廊专属"},
+        {"platform":"六只脚/磨房附件","track_id":"113204","disposition":"CONTROL_OR_OVERLAP_ONLY","reason":"约34km活动线，仅部分经过流徽榭；可下载附件可用于重叠检查但不能直接满足S12-A共识"}
+      ],
+      "file_delivery": "若正常权限可下载，交付原始GPX/KML；若需登录/积分/银两/CAPTCHA，只记录track_id、source_url、所需人工动作并标MANUAL_REQUIRED，不绕过限制。",
+      "stop_rule": "目标是至少找到2条有希望完整覆盖S12-A的独立Recorded GPS候选；若平台权限阻断，则优先返回精确track_id与下载所需人工动作。"
+    }
+  ],
+  "not_workbuddy_tasks": [
+    "停车通用费率和预约规则由官方页面直接进入Evidence/Canonical流程",
+    "current_operational_status由官方监控适配器持续刷新",
+    "GPS是否最终进入Canonical Geometry由系统QA/去重/一致性聚类决定"
+  ],
+  "delivery": {
+    "format": "JSON UTF-8",
+    "recommended_filename": "workbuddy_zijinshan_p0_delta_v2_result.json",
+    "results_rule": "一条来源一条Raw Evidence；不得合并成AI结论；UNKNOWN和MANUAL_REQUIRED均为合法结果。"
+  }
+}
