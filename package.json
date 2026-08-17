@@ -10,10 +10,12 @@
     "test": "tsx --test tests/*.test.ts",
     "migrate": "tsx -e \"import('./src/migration_runner.js').then(m => m.runDatabaseMigrations().then(console.log))\"",
     "seed": "tsx -e \"import('./seed/seed_loader.js').then(async s => { const { createMemoryRepositories } = await import('./src/repository/repositories.js'); const { repos } = createMemoryRepositories(); const res = await s.loadSeedManifest(repos); console.log(res); })\"",
+    "bootstrap:remaining": "tsx scripts/bootstrap_remaining.ts",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.0.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/pg": "^8.21.0",
