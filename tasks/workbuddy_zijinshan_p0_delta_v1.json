@@ -1,0 +1,139 @@
+{
+  "task_version": "1.0",
+  "task_id": "WB-ZJ-P0-DELTA-001",
+  "area_id": "area_zijinshan",
+  "area_name": "南京紫金山 / 钟山风景名胜区",
+  "objective": "只补当前 Area Completion Gate 的真实 P0 Evidence Gap；不重复做泛化热门路线盘点。",
+  "do_not_repeat": [
+    "江苏热门区域总体排名",
+    "全国热门路线总体排名",
+    "紫金山是否热门",
+    "蒋王庙/白马公园/板仓街/头陀岭等候选入口和Route Concept的泛化发现",
+    "未经独立验证的小红书/抖音/两步路综合热度分"
+  ],
+  "evidence_policy": {
+    "workbuddy_role": "RAW_EVIDENCE_COLLECTOR",
+    "must_not_declare": ["CANONICAL", "CURRENTLY_OPEN", "SAFE", "LEGAL_ROUTE"],
+    "unknown_allowed": true,
+    "no_captcha_or_login_bypass": true,
+    "preserve_raw_url_and_capture_time": true
+  },
+  "collections": [
+    {
+      "gap_key": "night_access_policy",
+      "priority": "P0",
+      "targets": [
+        "蒋王庙登山口",
+        "板仓街/锁金村方向主要登山入口",
+        "下马坊/孝陵卫方向主要步行入口",
+        "白马公园（用于与官方开放时间交叉验证，不需要重新证明其存在）"
+      ],
+      "queries": [
+        "紫金山 蒋王庙 晚上 登山 门禁 关闭 时间",
+        "紫金山 板仓街 晚上 登山口 门禁",
+        "紫金山 锁金村 夜爬 入口",
+        "紫金山 下马坊 夜间 徒步 入口",
+        "紫金山 孝陵卫 夜爬 入口"
+      ],
+      "preferred_sources": ["官方公众号", "现场公告/门禁照片", "近期小红书", "近期抖音", "近期微信公众号"],
+      "freshness": "优先2026年，用户观察优先近90天",
+      "required_fields": [
+        "access_point_name",
+        "source_platform",
+        "source_url",
+        "native_id",
+        "published_at",
+        "captured_at",
+        "raw_text_or_caption",
+        "screenshot_or_image_reference",
+        "claimed_opening_or_closing_time",
+        "gate_or_barrier_observation",
+        "observation_scope",
+        "confidence_notes"
+      ],
+      "stop_rule": "每个主要入口至少获得1条高权威证据，或2条近期独立现场观察；冲突必须全部保留，无法确认则输出UNKNOWN。"
+    },
+    {
+      "gap_key": "parking_fee_current",
+      "priority": "P0",
+      "targets": [
+        "紫金·钟爱里停车场",
+        "金陵STYLE停车场",
+        "白马公园周边主要停车场",
+        "明孝陵/梅花谷等与主要徒步入口相关停车场"
+      ],
+      "queries": [
+        "钟山风景区 停车场 收费 2026",
+        "紫金钟爱里 停车 收费",
+        "金陵STYLE 停车 收费",
+        "白马公园 停车场 收费 2026",
+        "明孝陵 停车场 收费 2026"
+      ],
+      "preferred_sources": ["停车场运营方", "景区官方", "现场收费牌照片", "近期地图用户照片/评论", "近期小红书/抖音实拍"],
+      "freshness": "收费标准优先近90天；官方现行页面优先",
+      "required_fields": [
+        "parking_name",
+        "related_access_point",
+        "source_platform",
+        "source_url",
+        "published_at",
+        "captured_at",
+        "fee_text_raw",
+        "opening_hours_raw",
+        "reservation_required_claim",
+        "holiday_rule_claim",
+        "photo_or_screenshot_reference",
+        "operator_or_publisher"
+      ],
+      "stop_rule": "每个核心停车场的现价需运营方/官方证据，或至少2条近期独立实拍交叉验证；地图文字摘要不能单独升格。"
+    },
+    {
+      "gap_key": "route_zj_s12_a_geometry",
+      "priority": "P0",
+      "target_route": "下马坊/驿站 → 民国邮政博物馆 → 南京地震科学馆/地震台 → 流徽榭",
+      "preferred_sources": ["两步路", "六只脚"],
+      "queries": [
+        "下马坊 流徽榭 徒步",
+        "下马坊 邮政博物馆 地震台 流徽榭",
+        "紫金山 下马坊 绿道 流徽榭",
+        "T80 绿道 陵园邮局 流徽榭"
+      ],
+      "candidate_target_count": "10-20",
+      "freshness": "优先近1-2年",
+      "selection_preferences": [
+        "完整实走Recorded GPS",
+        "起终点和POI顺序与目标Route高度一致",
+        "下载/收藏/使用量较高者优先",
+        "排除规划线、手绘线、明显缺段、漂移严重、Sibling路线"
+      ],
+      "required_fields": [
+        "source_platform",
+        "track_id",
+        "source_url",
+        "title",
+        "author",
+        "recorded_or_published_at",
+        "captured_at",
+        "distance_km",
+        "elevation_gain_m",
+        "duration",
+        "start_name",
+        "end_name",
+        "poi_sequence",
+        "popularity_metrics_raw",
+        "is_complete_claim",
+        "download_url_if_legitimate",
+        "local_file_name_if_legitimate"
+      ],
+      "file_delivery": "若平台正常允许下载，附KML/GPX原文件；若登录/CAPTCHA/下载限制阻断，只记录track_id与source_url并标MANUAL_REQUIRED，不绕过限制。",
+      "stop_rule": "先交付10-20条候选；Canonical Geometry仍必须由系统QA后确认至少2条独立、完整、兼容的Recorded GPS。"
+    }
+  ],
+  "delivery": {
+    "format": "JSON UTF-8",
+    "top_level_fields": ["task_id", "captured_at", "results", "blocked_items", "notes"],
+    "results_rule": "一条结果一条原始证据，不要把多个来源合并成AI结论。",
+    "blocked_items_rule": "记录platform/url/native_id/block_reason/manual_action_needed。",
+    "recommended_filename": "workbuddy_zijinshan_p0_delta_v1_result.json"
+  }
+}
