@@ -30,6 +30,7 @@ export interface IRouteFamilyRepository {
   findById(id: string): Promise<RouteFamily | null>;
   findByAreaId(areaId: string): Promise<RouteFamily[]>;
   findByCanonicalCode(code: string): Promise<RouteFamily | null>;
+  listAll(): Promise<RouteFamily[]>;
   save(family: RouteFamily): Promise<RouteFamily>;
 }
 
@@ -51,17 +52,20 @@ export interface IRawTrackRepository {
 export interface IRawTrackRouteAssignmentRepository {
   findByRouteId(routeId: string): Promise<RawTrackRouteAssignment[]>;
   findByTrackId(trackId: string): Promise<RawTrackRouteAssignment[]>;
+  listAll(): Promise<RawTrackRouteAssignment[]>;
   save(assignment: RawTrackRouteAssignment): Promise<RawTrackRouteAssignment>;
 }
 
 export interface ILegalScopeRepository {
   findByAreaId(areaId: string): Promise<LegalScope[]>;
+  listAll(): Promise<LegalScope[]>;
   save(scope: LegalScope): Promise<LegalScope>;
 }
 
 export interface IRuleRepository {
   findByAreaId(areaId: string): Promise<Rule[]>;
   findByRouteId(routeId: string): Promise<Rule[]>;
+  listAll(): Promise<Rule[]>;
   save(rule: Rule): Promise<Rule>;
 }
 
@@ -163,6 +167,7 @@ export class MemoryRouteFamilyRepository implements IRouteFamilyRepository {
     }
     return null;
   }
+  async listAll() { return Array.from(this.store.routeFamilies.values()); }
   async save(family: RouteFamily) {
     this.store.routeFamilies.set(family.id, { ...family });
     return family;
@@ -212,6 +217,7 @@ export class MemoryRawTrackRouteAssignmentRepository implements IRawTrackRouteAs
   async findByTrackId(trackId: string) {
     return Array.from(this.store.assignments.values()).filter(a => a.track_id === trackId);
   }
+  async listAll() { return Array.from(this.store.assignments.values()); }
   async save(assignment: RawTrackRouteAssignment) {
     this.store.assignments.set(assignment.id, { ...assignment });
     return assignment;
@@ -223,6 +229,7 @@ export class MemoryLegalScopeRepository implements ILegalScopeRepository {
   async findByAreaId(areaId: string) {
     return Array.from(this.store.legalScopes.values()).filter(s => s.area_id === areaId);
   }
+  async listAll() { return Array.from(this.store.legalScopes.values()); }
   async save(scope: LegalScope) {
     this.store.legalScopes.set(scope.id, { ...scope });
     return scope;
@@ -237,6 +244,7 @@ export class MemoryRuleRepository implements IRuleRepository {
   async findByRouteId(routeId: string) {
     return Array.from(this.store.rules.values()).filter(r => r.route_id === routeId);
   }
+  async listAll() { return Array.from(this.store.rules.values()); }
   async save(rule: Rule) {
     this.store.rules.set(rule.id, { ...rule });
     return rule;

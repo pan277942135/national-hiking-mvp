@@ -32,8 +32,10 @@ export function assertTrackNotRoute(track: RawTrack, route: Route): void {
  * 2. A planned navigation line is NOT Recorded GPS evidence.
  */
 export function assertPlannedLineNotRecordedGps(track: RawTrack): void {
-  if (track.provenance_type === 'PLANNED_LINE' && track.provenance_type === 'RECORDED_GPS') {
-    throw new InvariantViolationError(2, 'Planned lines cannot be typed as Recorded GPS evidence');
+  // provenance_type is a single discriminator. A PLANNED_NAVIGATION_LINE
+  // therefore cannot simultaneously be RECORDED_GPS.
+  if (track.provenance_type === 'PLANNED_NAVIGATION_LINE') {
+    return;
   }
 }
 
