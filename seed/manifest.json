@@ -40,10 +40,26 @@
     }
   ],
   "jurisdictions": [
-    { "code": "CN-32-01-02", "name": "南京市玄武区文化与林业局", "level": "DISTRICT" },
-    { "code": "CN-32-05-06", "name": "苏州市吴中区文旅体育局", "level": "DISTRICT" },
-    { "code": "CN-36-03-CROSS", "name": "萍乡-安福武功山联合管委会", "level": "MUNICIPAL" },
-    { "code": "CN-35-07-NP", "name": "武夷山国家公园管理局", "level": "NATIONAL" }
+    {
+      "code": "CN-32-01-02",
+      "name": "南京市玄武区文化与林业局",
+      "level": "DISTRICT"
+    },
+    {
+      "code": "CN-32-05-06",
+      "name": "苏州市吴中区文旅体育局",
+      "level": "DISTRICT"
+    },
+    {
+      "code": "CN-36-03-CROSS",
+      "name": "萍乡-安福武功山联合管委会",
+      "level": "MUNICIPAL"
+    },
+    {
+      "code": "CN-35-07-NP",
+      "name": "武夷山国家公园管理局",
+      "level": "NATIONAL"
+    }
   ],
   "legal_scopes": [
     {
@@ -242,7 +258,7 @@
     },
     {
       "id": "track_zj_kml_control",
-      "sha256": "control9918237461928374619283746192837461928374619283746192837461",
+      "sha256": "8e83036badd4d0985db80bb4f762fdbb0634204b94df401585f0f5725352b2cc",
       "file_name": "zj_s12_planned_navigation.kml",
       "format": "KML",
       "provenance_type": "PLANNED_NAVIGATION_LINE",
@@ -252,7 +268,7 @@
     },
     {
       "id": "track_zj_sibling_b_gps",
-      "sha256": "b_sibling992837461928374619283746192837461928374619283746192837461",
+      "sha256": "23f9163c45e36ee7c05a54297b60721bc7630b52f0311c526d573f5cd9284873",
       "file_name": "zj_sibling_b_genuine.gpx",
       "format": "GPX",
       "provenance_type": "RECORDED_GPS",
@@ -263,7 +279,7 @@
     },
     {
       "id": "track_sz_01_gps",
-      "sha256": "sz01genuine9928374619283746192837461928374619283746192837461928374",
+      "sha256": "e344fabdfa56f610f304557a0adabeca80d837a2f68c7f75eb0ca787f899e364",
       "file_name": "sz_wm_01_gps.gpx",
       "format": "GPX",
       "provenance_type": "RECORDED_GPS",
@@ -274,7 +290,7 @@
     },
     {
       "id": "track_wg_gps",
-      "sha256": "wg01genuine9928374619283746192837461928374619283746192837461928374",
+      "sha256": "f89756b3193b693d5539d92a4121a886fb0a0fa76f1247bd0667e457569e29c1",
       "file_name": "wg_alp_01_gps.gpx",
       "format": "GPX",
       "provenance_type": "RECORDED_GPS",
@@ -285,7 +301,7 @@
     },
     {
       "id": "track_wy_core_gps",
-      "sha256": "wycoregenuine99283746192837461928374619283746192837461928374619283",
+      "sha256": "597909f913e0af08dce84b4647a64fe0a5db4a9d0ce5d860858409d79ed3649d",
       "file_name": "wy_core_patrol.gpx",
       "format": "GPX",
       "provenance_type": "RECORDED_GPS",
@@ -296,7 +312,7 @@
     },
     {
       "id": "track_wy_buffer_gps",
-      "sha256": "wybuffergenuine9928374619283746192837461928374619283746192837461928",
+      "sha256": "fdf23520fcdee0a315131ad1570292fcc5c1ed29205d7ebdfb8ca08f470388c6",
       "file_name": "wy_buffer_trail.gpx",
       "format": "GPX",
       "provenance_type": "RECORDED_GPS",
