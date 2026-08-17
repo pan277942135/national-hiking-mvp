@@ -14,6 +14,7 @@ import { processTrackUpload } from './src/services/track_service.js';
 import { evaluateRouteEligibility } from './src/services/eligibility_service.js';
 import { createRuntimeSnapshot } from './src/services/runtime_snapshot_service.js';
 import { projectRoutePage } from './src/services/page_projection_service.js';
+import { createRawSource } from './src/services/raw_source_service.js';
 
 async function startServer() {
   const app = express();
@@ -47,7 +48,7 @@ async function startServer() {
         message: dbStatus.message
       },
       migrations: {
-        total: 10,
+        total: 11,
         valid: migrationValidation.valid,
         invariantsVerified: migrationValidation.invariantsVerified
       },
@@ -120,7 +121,7 @@ async function startServer() {
         legal_scopes: scopes,
         rules,
         migrations: {
-          total: 10,
+          total: 11,
           valid: migrationValidation.valid,
           invariants: migrationValidation.invariantsVerified
         },
@@ -227,6 +228,75 @@ async function startServer() {
       res.json(result);
     } catch (err: unknown) {
       res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // POST /raw-sources
+  // Evidence Inbox: stores immutable acquisition material in GCS
+  // and registers RawSource metadata in PostgreSQL.
+  // It does NOT automatically create Evidence or Canonical facts.
+  app.post('/raw-sources', async (req, res) => {
+    try {
+      const body = req.body;
+
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return res.status(400).json({ error: 'JSON request body is required' });
+      }
+
+      const {
+        area_id,
+        source_type,
+        source_platform,
+        source_url,
+        content_type,
+        content_text,
+        content_base64,
+        captured_at,
+        metadata
+      } = body;
+
+      if (!source_type || !source_platform) {
+        return res.status(400).json({
+          error: 'source_type and source_platform are required'
+        });
+      }
+
+      const hasText = typeof content_text === 'string';
+      const hasBase64 = typeof content_base64 === 'string';
+
+      if (hasText === hasBase64) {
+        return res.status(400).json({
+          error: 'Exactly one of content_text or content_base64 is required'
+        });
+      }
+
+      const rawSource = await createRawSource({
+        areaId: area_id,
+        sourceType: source_type,
+        sourcePlatform: source_platform,
+        sourceUrl: source_url,
+        contentType: content_type,
+        contentText: content_text,
+        contentBase64: content_base64,
+        capturedAt: captured_at,
+        metadata
+      });
+
+      res.status(201).json({
+        success: true,
+        raw_source: rawSource
+      });
+    } catch (err: unknown) {
+      const message = (err as Error).message;
+      const isValidationError =
+        message.includes('required') ||
+        message.includes('must not be empty') ||
+        message.includes('valid ISO timestamp');
+      const isConfigurationError = message.includes('not configured');
+
+      res
+        .status(isValidationError ? 400 : isConfigurationError ? 503 : 500)
+        .json({ error: message });
     }
   });
 
