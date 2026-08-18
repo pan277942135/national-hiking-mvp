@@ -15,6 +15,7 @@ import { evaluateRouteEligibility } from './src/services/eligibility_service.js'
 import { createRuntimeSnapshot } from './src/services/runtime_snapshot_service.js';
 import { projectRoutePage } from './src/services/page_projection_service.js';
 import { createRawSource } from './src/services/raw_source_service.js';
+import { mountAreaCatalogRoutes } from './src/routes/area_catalog_routes.js';
 
 async function startServer() {
   const app = express();
@@ -32,6 +33,11 @@ async function startServer() {
   // API ROUTES FIRST
   // -------------------------------------------------------------
 
+  // PostgreSQL-backed Area Catalog read routes.
+  // Stable identity/location comes from catalog tables; dynamic facts are joined
+  // from current FieldValue rows and never fabricated by the read projection.
+  mountAreaCatalogRoutes(app);
+
   // GET /health
   app.get('/health', async (req, res) => {
     const dbStatus = await checkDatabaseConnection();
@@ -48,7 +54,7 @@ async function startServer() {
         message: dbStatus.message
       },
       migrations: {
-        total: 11,
+        total: migrationValidation.migrationsFound.length,
         valid: migrationValidation.valid,
         invariantsVerified: migrationValidation.invariantsVerified
       },
@@ -121,7 +127,7 @@ async function startServer() {
         legal_scopes: scopes,
         rules,
         migrations: {
-          total: 11,
+          total: migrationValidation.migrationsFound.length,
           valid: migrationValidation.valid,
           invariants: migrationValidation.invariantsVerified
         },
