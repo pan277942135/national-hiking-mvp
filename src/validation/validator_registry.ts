@@ -56,7 +56,8 @@ function sourceDescriptor(record: EvidenceRecord): string {
     stringValue(record, 'source_platform'),
     stringValue(record, 'operator_or_publisher'),
     stringValue(record, 'publisher'),
-    stringValue(record, 'author')
+    stringValue(record, 'author'),
+    stringValue(record, 'source_url')
   ].join(' ').toLowerCase();
 }
 
@@ -68,16 +69,13 @@ function isHighAuthority(record: EvidenceRecord): boolean {
 }
 
 function independenceKey(record: EvidenceRecord): string {
-  const platform = stringValue(record, 'source_platform').toLowerCase();
-  const author = (
+  const platform = stringValue(record, 'source_platform').toLowerCase() || 'unknown-platform';
+  const actor = (
     stringValue(record, 'author') ||
     stringValue(record, 'operator_or_publisher') ||
-    stringValue(record, 'publisher') ||
-    stringValue(record, 'native_id') ||
-    stringValue(record, 'track_id') ||
-    stringValue(record, 'source_url')
+    stringValue(record, 'publisher')
   ).toLowerCase();
-  return `${platform}:${author}`;
+  return `${platform}:${actor || 'unknown-actor'}`;
 }
 
 function uniqueIndependent(records: EvidenceRecord[]): EvidenceRecord[] {
@@ -173,7 +171,7 @@ const nightAccessValidator: EvidenceValidator = {
     } else {
       decision.state = 'SUPPORTED';
       decision.confidence = 0.58;
-      decision.reasons.push('Only one non-authoritative recent observation is available.');
+      decision.reasons.push('Only one independent non-authoritative recent observation is available.');
     }
     return decision;
   }
@@ -230,7 +228,7 @@ const parkingFeeValidator: EvidenceValidator = {
     } else {
       decision.state = 'SUPPORTED';
       decision.confidence = 0.6;
-      decision.reasons.push('Single recent non-authoritative fee observation only.');
+      decision.reasons.push('Single independent recent non-authoritative fee observation only.');
     }
     return decision;
   }
