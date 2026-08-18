@@ -16,6 +16,7 @@ import { createRuntimeSnapshot } from './src/services/runtime_snapshot_service.j
 import { projectRoutePage } from './src/services/page_projection_service.js';
 import { createRawSource } from './src/services/raw_source_service.js';
 import { mountAreaCatalogRoutes } from './src/routes/area_catalog_routes.js';
+import { mountPageFactoryRoutes } from './src/routes/page_factory_routes.js';
 
 async function startServer() {
   const app = express();
@@ -37,6 +38,10 @@ async function startServer() {
   // Stable identity/location comes from catalog tables; dynamic facts are joined
   // from current FieldValue rows and never fabricated by the read projection.
   mountAreaCatalogRoutes(app);
+
+  // Read-only public page projections generated from production PostgreSQL.
+  // Page Factory must never write back to Canonical truth.
+  mountPageFactoryRoutes(app);
 
   // GET /health
   app.get('/health', async (req, res) => {
