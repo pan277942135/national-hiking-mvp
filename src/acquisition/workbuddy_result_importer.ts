@@ -97,6 +97,14 @@ function nativeIdFor(record: Record<string, unknown>): string | null {
   return null;
 }
 
+export function inferGapKey(record: Record<string, unknown>): WorkBuddyGapKey {
+  if (typeof record.gap_key === 'string' && record.gap_key.trim()) return record.gap_key.trim();
+  if (typeof record.access_point_name === 'string' && record.access_point_name.trim()) return 'night_access_policy';
+  if (typeof record.parking_name === 'string' && record.parking_name.trim()) return 'parking_fee_current';
+  if (typeof record.track_id === 'string' && record.track_id.trim()) return 'route_zj_s12_a_geometry';
+  throw new Error('WorkBuddy result cannot infer gap_key from result shape');
+}
+
 export function sourceTypeForGap(gapKey: WorkBuddyGapKey): string {
   if (gapKey === 'night_access_policy') return 'ACCESS_EVIDENCE';
   if (gapKey === 'parking_fee_current') return 'PARKING_EVIDENCE';
@@ -119,7 +127,7 @@ export function parseWorkBuddyResultBatch(input: unknown): WorkBuddyResultBatch 
 
   const results = input.results.map((raw, index) => {
     if (!isObject(raw)) throw new Error(`WorkBuddy results[${index}] must be an object`);
-    const gapKey = requiredString(raw.gap_key, `results[${index}].gap_key`);
+    const gapKey = inferGapKey(raw);
     const sourcePlatform = requiredString(raw.source_platform, `results[${index}].source_platform`);
     const sourceUrl = requiredString(raw.source_url, `results[${index}].source_url`);
     const resultCapturedAt = assertIsoTimestamp(
