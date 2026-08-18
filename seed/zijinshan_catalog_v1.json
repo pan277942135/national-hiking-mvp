@@ -1,0 +1,209 @@
+{
+  "version": "1.0",
+  "area_id": "area_zijinshan",
+  "policy": {
+    "default_catalog_state": "SUPPORTED",
+    "coordinates_must_remain_unknown_without_point_evidence": true,
+    "dynamic_facts_forbidden_in_static_catalog": [
+      "current_fee",
+      "opening_hours",
+      "night_access_policy",
+      "temporary_closure",
+      "current_operational_status"
+    ]
+  },
+  "access_points": [
+    {
+      "id": "ap_zj_xiamafang_metro",
+      "name": "地铁下马坊站",
+      "access_type": "TRANSIT_HUB",
+      "catalog_state": "SUPPORTED",
+      "aliases": ["下马坊地铁站"],
+      "latitude": null,
+      "longitude": null,
+      "is_public": true,
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_ENTRANCE",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_access_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "ap_zj_xiaolingwei_metro",
+      "name": "地铁孝陵卫站",
+      "access_type": "TRANSIT_HUB",
+      "catalog_state": "SUPPORTED",
+      "aliases": ["孝陵卫地铁站"],
+      "latitude": null,
+      "longitude": null,
+      "is_public": true,
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_ENTRANCE",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_access_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "ap_zj_zhonglingjie_metro",
+      "name": "地铁钟灵街站",
+      "access_type": "TRANSIT_HUB",
+      "catalog_state": "SUPPORTED",
+      "aliases": ["钟灵街地铁站"],
+      "latitude": null,
+      "longitude": null,
+      "is_public": true,
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_ENTRANCE",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_access_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "ap_zj_muxuyuan_metro",
+      "name": "地铁苜蓿园站",
+      "access_type": "TRANSIT_HUB",
+      "catalog_state": "SUPPORTED",
+      "aliases": ["苜蓿园地铁站"],
+      "latitude": null,
+      "longitude": null,
+      "is_public": true,
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_ENTRANCE",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_access_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    }
+  ],
+  "parking": [
+    {
+      "id": "parking_zj_zhongaili",
+      "name": "紫金·钟爱里停车场",
+      "catalog_state": "SUPPORTED",
+      "related_access_point_id": null,
+      "latitude": null,
+      "longitude": null,
+      "capacity": null,
+      "aliases": ["紫金·钟爱里", "钟爱里停车场"],
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_PARKING",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_parking_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "parking_zj_jinling_style",
+      "name": "金陵STYLE停车场",
+      "catalog_state": "SUPPORTED",
+      "related_access_point_id": null,
+      "latitude": null,
+      "longitude": null,
+      "capacity": null,
+      "aliases": ["金陵style停车场", "金陵STYLE"],
+      "metadata": {
+        "role": "OFFICIAL_VISITOR_DISTRIBUTION_PARKING",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_and_parking_role_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "parking_zj_zhongshanling",
+      "name": "中山陵停车场",
+      "catalog_state": "SUPPORTED",
+      "related_access_point_id": "ap_zj_xiamafang_metro",
+      "latitude": null,
+      "longitude": null,
+      "capacity": null,
+      "aliases": [],
+      "metadata": {
+        "role": "OFFICIAL_INTERNAL_PARKING",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "relation_note": "official shuttle connection from Xiamafang; relation is transport association, not nearest-distance assertion",
+        "evidence_scope": "identity_and_transport_relation_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "parking_zj_meihuagu_west",
+      "name": "梅花谷西停车场",
+      "catalog_state": "SUPPORTED",
+      "related_access_point_id": null,
+      "latitude": null,
+      "longitude": null,
+      "capacity": null,
+      "aliases": ["梅花谷停车场"],
+      "metadata": {
+        "role": "OFFICIAL_PARKING_ENTITY",
+        "source_url": "https://zschina.nanjing.gov.cn/zfxxgk/zfxxgkml/202509/t20250925_5657134.html",
+        "source_authority": "中山陵园管理局 / 南京市公安局 / 南京市交通运输局",
+        "evidence_scope": "identity_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    }
+  ],
+  "pois": [
+    {
+      "id": "poi_zj_liuhuixie",
+      "name": "流徽榭",
+      "poi_type": "LANDMARK",
+      "catalog_state": "SUPPORTED",
+      "latitude": null,
+      "longitude": null,
+      "altitude_m": null,
+      "aliases": [],
+      "metadata": {
+        "route_relevance": ["route_zj_s12_a"],
+        "source_url": "https://zschina.nanjing.gov.cn/fjms/fwzn/ldxl/",
+        "source_authority": "南京市中山陵园管理局",
+        "evidence_scope": "identity_and_route_semantics_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "poi_zj_republic_post_museum",
+      "name": "南京民国邮政博物馆",
+      "poi_type": "MUSEUM",
+      "catalog_state": "SUPPORTED",
+      "latitude": null,
+      "longitude": null,
+      "altitude_m": null,
+      "aliases": ["民国邮政博物馆", "邮政博物馆"],
+      "metadata": {
+        "route_relevance": ["route_zj_s12_a"],
+        "source_url": "https://zschina.nanjing.gov.cn/lyzx/202605/t20260521_5843917.html",
+        "source_authority": "南京市中山陵园管理局",
+        "evidence_scope": "identity_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    },
+    {
+      "id": "poi_zj_earthquake_science_museum",
+      "name": "南京地震科学馆",
+      "poi_type": "MUSEUM",
+      "catalog_state": "SUPPORTED",
+      "latitude": null,
+      "longitude": null,
+      "altitude_m": null,
+      "aliases": ["地震科学馆", "南京基准地震台"],
+      "metadata": {
+        "route_relevance": ["route_zj_s12_a"],
+        "source_url": "https://zschina.nanjing.gov.cn/lyzx/202605/t20260521_5843917.html",
+        "source_authority": "南京市中山陵园管理局",
+        "evidence_scope": "identity_and_general_location_context_only",
+        "promotion_block": "POINT_COORDINATE_EVIDENCE_REQUIRED"
+      }
+    }
+  ]
+}
