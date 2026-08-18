@@ -16,6 +16,7 @@
     "validate:workbuddy": "tsx scripts/validate_workbuddy_result.ts",
     "qa:geometry": "tsx scripts/qa_geometry_manifest.ts",
     "seed:zijinshan-catalog": "tsx scripts/seed_zijinshan_catalog.ts",
+    "smoke:area-page": "tsx scripts/smoke_area_page_factory.ts",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
