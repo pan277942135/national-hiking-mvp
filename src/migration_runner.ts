@@ -1,6 +1,6 @@
 /**
  * Migration Runner for National Hiking Backend MVP
- * Validates, checks, and applies migrations 0001 through 0011.
+ * Validates, checks, and applies migrations 0001 through 0012.
  */
 
 import fs from 'node:fs';
@@ -28,6 +28,7 @@ export interface MigrationValidationResult {
     postgisConfigured: boolean;
     provenanceModelsPresent: boolean;
     runtimeSnapshotValidityCheck: boolean;
+    areaCatalogEntitiesPresent: boolean;
   };
 }
 
@@ -45,14 +46,11 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
         oneCurrentFieldValueInvariant: false,
         postgisConfigured: false,
         provenanceModelsPresent: false,
-        runtimeSnapshotValidityCheck: false
+        runtimeSnapshotValidityCheck: false,
+        areaCatalogEntitiesPresent: false
       }
     };
   }
-
-  const files = fs.readdirSync(migrationsDir)
-    .filter(f => f.endsWith('.sql'))
-    .sort();
 
   const expectedOrder = [
     '0001_initial_schema.sql',
@@ -65,7 +63,8 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
     '0008_activities_and_first_party_evidence.sql',
     '0009_publication_and_eligibility_gates.sql',
     '0010_page_projections_and_indexes.sql',
-    '0011_raw_sources.sql'
+    '0011_raw_sources.sql',
+    '0012_area_catalog_entities.sql'
   ];
 
   const migrationsFound: MigrationFile[] = [];
@@ -89,8 +88,7 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
 
   const allSql = migrationsFound.map(m => m.sql).join('\n');
 
-  // Verify critical invariants in DDL
-  const orderedSequentially = migrationsFound.length === 11 && errors.length === 0;
+  const orderedSequentially = migrationsFound.length === expectedOrder.length && errors.length === 0;
   const foreignKeysDeclared = allSql.includes('REFERENCES route_families(id)') &&
                               allSql.includes('REFERENCES routes(id)') &&
                               allSql.includes('REFERENCES areas(id)');
@@ -101,6 +99,10 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
                                  allSql.includes('RECORDED_GPS') &&
                                  allSql.includes('PLANNED_NAVIGATION_LINE');
   const runtimeSnapshotValidityCheck = allSql.includes('chk_runtime_validity CHECK (valid_until >= observed_at)');
+  const areaCatalogEntitiesPresent = allSql.includes('CREATE TABLE IF NOT EXISTS access_points') &&
+                                     allSql.includes('CREATE TABLE IF NOT EXISTS pois') &&
+                                     allSql.includes('CREATE TABLE IF NOT EXISTS parking') &&
+                                     allSql.includes('related_access_point_id VARCHAR(64)');
 
   if (!oneCurrentFieldValueInvariant) {
     errors.push('Missing unique partial index enforcing One-Current FieldValue invariant in 0004');
@@ -110,6 +112,9 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
   }
   if (!foreignKeysDeclared) {
     errors.push('Foreign key relationships incomplete in route / area migrations');
+  }
+  if (!areaCatalogEntitiesPresent) {
+    errors.push('Missing Area Catalog entity schema for access_points / pois / parking in 0012');
   }
 
   return {
@@ -122,7 +127,8 @@ export function loadAndValidateMigrations(migrationsDir: string = path.join(proc
       oneCurrentFieldValueInvariant,
       postgisConfigured,
       provenanceModelsPresent,
-      runtimeSnapshotValidityCheck
+      runtimeSnapshotValidityCheck,
+      areaCatalogEntitiesPresent
     }
   };
 }
@@ -142,7 +148,7 @@ export async function runDatabaseMigrations(): Promise<{ success: boolean; appli
     return {
       success: true,
       applied: validation.migrationsFound.map(m => m.name),
-      message: 'Validated 11/11 migrations successfully in dry-run mode (External DATABASE_URL not attached).'
+      message: `Validated ${validation.migrationsFound.length}/${validation.migrationsFound.length} migrations successfully in dry-run mode (External DATABASE_URL not attached).`
     };
   }
 
@@ -151,7 +157,6 @@ export async function runDatabaseMigrations(): Promise<{ success: boolean; appli
   try {
     await client.query('BEGIN');
     
-    // Ensure migrations table
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version VARCHAR(255) PRIMARY KEY,
@@ -181,7 +186,7 @@ export async function runDatabaseMigrations(): Promise<{ success: boolean; appli
       applied,
       message: applied.length > 0
         ? `Applied ${applied.length} migrations to PostgreSQL.`
-        : 'All 11 migrations already up to date.'
+        : `All ${validation.migrationsFound.length} migrations already up to date.`
     };
   } catch (err: unknown) {
     await client.query('ROLLBACK');
