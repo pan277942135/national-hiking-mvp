@@ -21,6 +21,12 @@ export type IdentityState =
   | 'CANONICAL'
   | 'DEPRECATED';
 
+export type CatalogState =
+  | 'DRAFT'
+  | 'SUPPORTED'
+  | 'CANONICAL'
+  | 'DEPRECATED';
+
 export type GeometryState =
   | 'NO_GEOMETRY'
   | 'EXTERNAL_DEPENDENCY'
@@ -275,11 +281,14 @@ export interface POI {
   area_id: string;
   name: string;
   poi_type: string;
-  latitude: number;
-  longitude: number;
+  catalog_state: CatalogState;
+  latitude?: number;
+  longitude?: number;
   altitude_m?: number;
+  aliases?: string[];
   metadata?: Record<string, unknown>;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface AccessPoint {
@@ -287,23 +296,29 @@ export interface AccessPoint {
   area_id: string;
   name: string;
   access_type: string;
-  latitude: number;
-  longitude: number;
-  is_public: boolean;
+  catalog_state: CatalogState;
+  latitude?: number;
+  longitude?: number;
+  is_public?: boolean;
+  aliases?: string[];
   metadata?: Record<string, unknown>;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface Parking {
   id: string;
   area_id: string;
+  related_access_point_id?: string;
   name: string;
+  catalog_state: CatalogState;
   capacity?: number;
-  fee_type?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  aliases?: string[];
   metadata?: Record<string, unknown>;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface CanonicalTrack {
@@ -337,4 +352,3 @@ export interface ProtectedAreaZone {
   entry_requires_permit: boolean;
   created_at?: string;
 }
-
