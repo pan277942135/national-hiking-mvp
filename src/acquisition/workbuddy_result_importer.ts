@@ -47,6 +47,7 @@ export interface WorkBuddyImportSummary {
   task_id: string;
   batch_raw_source_id: string | null;
   created: RawSourceResult[];
+  created_blocked_records: RawSourceResult[];
   skipped_duplicate_fingerprints: string[];
   blocked_items_count: number;
 }
@@ -222,6 +223,7 @@ export async function importWorkBuddyResult(
   }
 
   const created: RawSourceResult[] = [];
+  const createdBlockedRecords: RawSourceResult[] = [];
   const skipped: string[] = [];
 
   for (const evidence of normalized) {
@@ -252,10 +254,45 @@ export async function importWorkBuddyResult(
     created.push(raw);
   }
 
+  for (const blocked of batch.blocked_items) {
+    const blockedFingerprint = evidenceFingerprint({
+      task_id: batch.task_id,
+      record_kind: 'ACQUISITION_BLOCKED',
+      blocked
+    });
+    const existing = await existingRawSourceByFingerprint(blockedFingerprint);
+    if (existing) {
+      skipped.push(blockedFingerprint);
+      continue;
+    }
+
+    const raw = await createRawSource({
+      areaId,
+      sourceType: 'ACQUISITION_BLOCKED',
+      sourcePlatform: 'WORKBUDDY',
+      sourceUrl: typeof blocked.url === 'string' ? blocked.url : undefined,
+      contentType: 'application/json',
+      contentText: JSON.stringify(blocked, null, 2),
+      capturedAt: batch.captured_at,
+      metadata: {
+        task_id: batch.task_id,
+        record_kind: 'ACQUISITION_BLOCKED',
+        original_source_platform: blocked.platform || null,
+        native_id: blocked.native_id || null,
+        block_reason: blocked.block_reason || null,
+        manual_action_needed: blocked.manual_action_needed || null,
+        workbuddy_evidence_fingerprint: blockedFingerprint,
+        batch_raw_source_id: batchRawSourceId
+      }
+    });
+    createdBlockedRecords.push(raw);
+  }
+
   return {
     task_id: batch.task_id,
     batch_raw_source_id: batchRawSourceId,
     created,
+    created_blocked_records: createdBlockedRecords,
     skipped_duplicate_fingerprints: skipped,
     blocked_items_count: batch.blocked_items.length
   };
