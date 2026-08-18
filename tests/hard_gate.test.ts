@@ -18,15 +18,16 @@ import {
   assertRuntimeSnapshotValidity
 } from '../src/domain/invariants.js';
 
-test('Migration Suite: Validates 0001 through 0011 sequentially and checks invariants', () => {
+test('Migration Suite: Validates 0001 through 0012 sequentially and checks invariants', () => {
   const result = loadAndValidateMigrations();
   assert.equal(result.valid, true, `Migrations must be valid: ${result.errors.join(', ')}`);
-  assert.equal(result.migrationsFound.length, 11, 'Must have exactly 11 migrations');
+  assert.equal(result.migrationsFound.length, 12, 'Must have exactly 12 migrations');
   assert.equal(result.invariantsVerified.orderedSequentially, true);
   assert.equal(result.invariantsVerified.foreignKeysDeclared, true);
   assert.equal(result.invariantsVerified.oneCurrentFieldValueInvariant, true);
   assert.equal(result.invariantsVerified.provenanceModelsPresent, true);
   assert.equal(result.invariantsVerified.runtimeSnapshotValidityCheck, true);
+  assert.equal(result.invariantsVerified.areaCatalogEntitiesPresent, true);
 });
 
 test('Seed Idempotency: Second identical seed run produces zero mutations', async () => {
